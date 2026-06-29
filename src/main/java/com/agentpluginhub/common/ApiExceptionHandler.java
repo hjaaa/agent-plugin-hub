@@ -29,4 +29,17 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDuplicate(DuplicatePublishException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
     }
+
+    // 非法状态跃迁 / 并发审批冲突 → 409
+    @ExceptionHandler({com.agentpluginhub.review.IllegalTransitionException.class,
+            org.springframework.dao.OptimisticLockingFailureException.class})
+    public ResponseEntity<Map<String, String>> handleConflict(Exception ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+    }
+
+    // submission 不存在 → 404
+    @ExceptionHandler(com.agentpluginhub.review.SubmissionNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleSubmissionMissing(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+    }
 }
