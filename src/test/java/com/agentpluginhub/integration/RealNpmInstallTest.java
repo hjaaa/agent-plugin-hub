@@ -12,16 +12,21 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.testcontainers.containers.MySQLContainer;
 
 class RealNpmInstallTest {
 
     private static ConfigurableApplicationContext ctx;
     private static int port;
     private static Path tmp;
+    private static MySQLContainer<?> mysql;
 
     @BeforeAll
     static void boot() throws Exception {
         Assumptions.assumeTrue(commandExists("npm"), "npm 不可用,跳过真实 npm install 集成测试");
+
+        mysql = new MySQLContainer<>("mysql:8.0");
+        mysql.start();
 
         tmp = Files.createTempDirectory("aph-it");
         Path artifacts = tmp.resolve("artifacts");
@@ -50,7 +55,10 @@ class RealNpmInstallTest {
 
         ctx = new SpringApplicationBuilder(AgentPluginHubApplication.class)
                 .run("--server.port=0",
-                        "--app.artifacts-dir=" + artifacts.toAbsolutePath());
+                        "--app.artifacts-dir=" + artifacts.toAbsolutePath(),
+                        "--spring.datasource.url=" + mysql.getJdbcUrl(),
+                        "--spring.datasource.username=" + mysql.getUsername(),
+                        "--spring.datasource.password=" + mysql.getPassword());
         port = Integer.parseInt(ctx.getEnvironment().getProperty("local.server.port"));
     }
 
@@ -58,6 +66,9 @@ class RealNpmInstallTest {
     static void shutdown() {
         if (ctx != null) {
             ctx.close();
+        }
+        if (mysql != null) {
+            mysql.stop();
         }
     }
 
@@ -89,7 +100,12 @@ class RealNpmInstallTest {
     }
 
     private static int runProcess(File dir, String... cmd) throws Exception {
-        Process p = new ProcessBuilder(cmd).directory(dir).inheritIO().start();
+        // 不继承 stdin:inheritIO() 会把 Surefire 的 stdin 传给子进程,
+        // npm 退出时关闭 stdin 会损坏 Surefire 的通信通道导致 BUILD FAILURE。
+        Process p = new ProcessBuilder(cmd).directory(dir)
+                .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
         return p.waitFor();
     }
 }

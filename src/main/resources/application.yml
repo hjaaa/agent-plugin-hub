@@ -1,5 +1,16 @@
 server:
   port: 8080
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/agentpluginhub?useSSL=false&serverTimezone=UTC&characterEncoding=utf8}
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
 app:
-  # M0 本地文件存储目录,放 index.json 与 *.tgz;由 ./scripts/seed-artifacts.sh 填充
+  # M1 制品存储改 S3/MinIO(Task 3 接);保留本地目录用于 dev/部分测试
   artifacts-dir: ./artifacts
