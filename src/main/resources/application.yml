@@ -1,0 +1,5 @@
+server:
+  port: 8080
+app:
+  # M0 本地文件存储目录,放 index.json 与 *.tgz;由 ./scripts/seed-artifacts.sh 填充
+  artifacts-dir: ./artifacts

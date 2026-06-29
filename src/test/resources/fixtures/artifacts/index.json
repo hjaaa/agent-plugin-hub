@@ -1,0 +1,13 @@
+{
+  "plugins": [
+    {
+      "package": "@demo/hello-plugin",
+      "pluginName": "hello-plugin",
+      "description": "Demo plugin for agent-plugin-hub M0 smoke test",
+      "distTags": { "latest": "1.0.0" },
+      "versions": [
+        { "version": "1.0.0", "tarball": "demo-hello-plugin-1.0.0.tgz" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@demo/hello-plugin",
+  "version": "1.0.0",
+  "description": "Demo plugin for agent-plugin-hub M0 smoke test",
+  "files": [
+    ".claude-plugin",
+    "commands"
+  ]
+}
