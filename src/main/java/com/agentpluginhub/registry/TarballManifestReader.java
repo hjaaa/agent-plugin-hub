@@ -25,21 +25,30 @@ public class TarballManifestReader {
 
     // 从 npm tarball(.tgz)提取 package/package.json 并解析为 ObjectNode;读不到/解析失败返回 empty
     public Optional<ObjectNode> readPackageJson(byte[] tgz) {
+        return readEntry(tgz, "package/package.json");
+    }
+
+    // 从 npm tarball 提取 package/.claude-plugin/plugin.json;读不到/解析失败返回 empty
+    public Optional<ObjectNode> readClaudePluginJson(byte[] tgz) {
+        return readEntry(tgz, "package/.claude-plugin/plugin.json");
+    }
+
+    private Optional<ObjectNode> readEntry(byte[] tgz, String entryName) {
         try (GzipCompressorInputStream gzip = new GzipCompressorInputStream(new ByteArrayInputStream(tgz));
                 TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
             TarArchiveEntry entry;
             while ((entry = tar.getNextEntry()) != null) {
-                if (entry.isFile() && "package/package.json".equals(entry.getName())) {
+                if (entry.isFile() && entryName.equals(entry.getName())) {
                     if (entry.getSize() > MAX_MANIFEST_BYTES) {
-                        log.warn("package.json in tarball too large ({} bytes), skipping", entry.getSize());
+                        log.warn("{} in tarball too large ({} bytes), skipping", entryName, entry.getSize());
                         return Optional.empty();
                     }
-                    byte[] content = tar.readAllBytes(); // 读取量受 tar 声明的 entry 大小限制
+                    byte[] content = tar.readAllBytes();
                     return Optional.of((ObjectNode) mapper.readTree(content));
                 }
             }
         } catch (Exception e) {
-            log.warn("failed to read package.json from tarball: {}", e.getMessage());
+            log.warn("failed to read {} from tarball: {}", entryName, e.getMessage());
         }
         return Optional.empty();
     }
