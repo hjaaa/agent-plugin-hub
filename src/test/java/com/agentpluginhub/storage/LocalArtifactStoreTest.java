@@ -56,4 +56,17 @@ class LocalArtifactStoreTest {
         assertThatThrownBy(() -> newStore().load("sub\\evil.tgz"))
                 .isInstanceOf(ArtifactNotFoundException.class);
     }
+
+    @org.junit.jupiter.api.Test
+    void should_save_then_load_and_report_exists() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("aph-local");
+        com.agentpluginhub.config.AppProperties props = new com.agentpluginhub.config.AppProperties();
+        props.setArtifactsDir(dir.toString());
+        LocalArtifactStore store = new LocalArtifactStore(props);
+
+        org.assertj.core.api.Assertions.assertThat(store.exists("a.tgz")).isFalse();
+        store.save("a.tgz", new byte[]{1, 2, 3});
+        org.assertj.core.api.Assertions.assertThat(store.exists("a.tgz")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(store.load("a.tgz")).containsExactly(1, 2, 3);
+    }
 }

@@ -25,3 +25,6 @@ app:
   registry:
     auth:
       enabled: false
+  storage:
+    type: local
+  artifacts-dir: ${java.io.tmpdir}/aph-test-artifacts
