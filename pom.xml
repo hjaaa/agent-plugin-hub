@@ -18,7 +18,7 @@
     <description>面向 AI 编码 agent 的内部插件市场平台(里程碑 0)</description>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>17</java.version>
     </properties>
 
     <dependencyManagement>
