@@ -95,4 +95,38 @@ class MarketplaceServiceTest {
 
         assertThat(m.plugins()).extracting(PluginRef::name).containsExactly("boolbundle");
     }
+
+    @Test
+    void should_skip_plugin_with_non_optional_peer_dependency() throws Exception {
+        PluginCatalog catalog = mock(PluginCatalog.class);
+        ArtifactStore store = mock(ArtifactStore.class);
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/peer\",\"version\":\"1.0.0\",\"peerDependencies\":{\"react\":\"^18\"}}");
+        PluginEntry p = new PluginEntry("@demo/peer", "peer", "p",
+                Map.of("latest", "1.0.0"), List.of(new VersionEntry("1.0.0", "demo-peer-1.0.0.tgz")));
+        when(catalog.all()).thenReturn(List.of(p));
+        when(store.load("demo-peer-1.0.0.tgz")).thenReturn(tgz);
+
+        Marketplace m = new MarketplaceService(catalog, store, new TarballManifestReader(new ObjectMapper()))
+                .render("http://h");
+
+        assertThat(m.plugins()).isEmpty(); // 非可选 peer → 不广告
+    }
+
+    @Test
+    void should_advertise_plugin_with_optional_peer_dependency() throws Exception {
+        PluginCatalog catalog = mock(PluginCatalog.class);
+        ArtifactStore store = mock(ArtifactStore.class);
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/optpeer\",\"version\":\"1.0.0\",\"peerDependencies\":{\"react\":\"^18\"},\"peerDependenciesMeta\":{\"react\":{\"optional\":true}}}");
+        PluginEntry p = new PluginEntry("@demo/optpeer", "optpeer", "o",
+                Map.of("latest", "1.0.0"), List.of(new VersionEntry("1.0.0", "demo-optpeer-1.0.0.tgz")));
+        when(catalog.all()).thenReturn(List.of(p));
+        when(store.load("demo-optpeer-1.0.0.tgz")).thenReturn(tgz);
+
+        Marketplace m = new MarketplaceService(catalog, store, new TarballManifestReader(new ObjectMapper()))
+                .render("http://h");
+
+        assertThat(m.plugins()).extracting(PluginRef::name).containsExactly("optpeer"); // 可选 peer → 广告
+    }
 }

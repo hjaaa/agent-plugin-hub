@@ -84,17 +84,50 @@ public class MarketplaceService {
     }
 
     private boolean manifestHasExternalDependencies(ObjectNode manifest) {
-        JsonNode deps = manifest.get("dependencies");
-        if (deps == null || !deps.isObject() || deps.isEmpty()) {
-            return false;
-        }
         Set<String> bundled = bundledNames(manifest);
-        for (Iterator<String> it = deps.fieldNames(); it.hasNext();) {
-            if (!bundled.contains(it.next())) {
-                return true; // 存在需向 registry 解析的非 bundle 外部依赖
+        // 常规 dependencies(非 bundle)需向 registry 解析
+        if (hasNonBundled(manifest.get("dependencies"), bundled)) {
+            return true;
+        }
+        // 非可选 peerDependencies:npm v7+ 默认安装,也会向 registry 解析
+        JsonNode peers = manifest.get("peerDependencies");
+        if (peers != null && peers.isObject() && !peers.isEmpty()) {
+            Set<String> optionalPeers = optionalPeerNames(manifest);
+            for (Iterator<String> it = peers.fieldNames(); it.hasNext();) {
+                String name = it.next();
+                if (!bundled.contains(name) && !optionalPeers.contains(name)) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    private boolean hasNonBundled(JsonNode deps, Set<String> bundled) {
+        if (deps == null || !deps.isObject() || deps.isEmpty()) {
+            return false;
+        }
+        for (Iterator<String> it = deps.fieldNames(); it.hasNext();) {
+            if (!bundled.contains(it.next())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // peerDependenciesMeta.<name>.optional == true 的 peer 视为可选,不阻断安装
+    private Set<String> optionalPeerNames(ObjectNode manifest) {
+        Set<String> names = new HashSet<>();
+        JsonNode meta = manifest.get("peerDependenciesMeta");
+        if (meta != null && meta.isObject()) {
+            meta.fields().forEachRemaining(en -> {
+                JsonNode opt = en.getValue() == null ? null : en.getValue().get("optional");
+                if (opt != null && opt.asBoolean(false)) {
+                    names.add(en.getKey());
+                }
+            });
+        }
+        return names;
     }
 
     private Set<String> bundledNames(ObjectNode manifest) {
