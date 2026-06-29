@@ -14,13 +14,9 @@ import com.agentpluginhub.registry.model.Packument;
 import com.agentpluginhub.storage.ArtifactStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.junit.jupiter.api.Test;
 
 class PackumentServiceTest {
@@ -72,7 +68,7 @@ class PackumentServiceTest {
 
     @Test
     void should_include_dependencies_from_tarball_manifest() throws Exception {
-        byte[] tgz = tgzWithPackageJson(
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
                 "{\"name\":\"@demo/dep\",\"version\":\"2.0.0\",\"dependencies\":{\"left-pad\":\"^1.3.0\"}}");
         PluginCatalog catalog = mock(PluginCatalog.class);
         ArtifactStore store = mock(ArtifactStore.class);
@@ -97,17 +93,4 @@ class PackumentServiceTest {
         assertThat(v.get("dist").get("shasum").asText()).isEqualTo(IntegrityUtil.hexSha1(tgz));
     }
 
-    private static byte[] tgzWithPackageJson(String json) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        try (TarArchiveOutputStream tar =
-                new TarArchiveOutputStream(new GzipCompressorOutputStream(bos))) {
-            byte[] content = json.getBytes(StandardCharsets.UTF_8);
-            TarArchiveEntry e = new TarArchiveEntry("package/package.json");
-            e.setSize(content.length);
-            tar.putArchiveEntry(e);
-            tar.write(content);
-            tar.closeArchiveEntry();
-        }
-        return bos.toByteArray();
-    }
 }
