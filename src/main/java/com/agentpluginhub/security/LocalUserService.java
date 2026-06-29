@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 // OIDC 只认证;此服务负责本地用户 upsert 与本地角色读取/引导。
 @Service
@@ -40,7 +41,7 @@ public class LocalUserService {
         }
         // 引导初始 admin
         String bootstrapSubject = props.getBootstrapAdminSubject();
-        if (bootstrapSubject != null && bootstrapSubject.equals(subject)
+        if (StringUtils.hasText(bootstrapSubject) && bootstrapSubject.equals(subject)
                 && !roles.existsByUserIdAndRole(user.getId(), ADMIN)) {
             roles.save(new UserRole(user.getId(), ADMIN));
         }

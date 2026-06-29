@@ -13,6 +13,7 @@ import com.agentpluginhub.domain.SubmissionState;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.review.ReviewService;
 import com.agentpluginhub.support.AbstractIntegrationTest;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,43 @@ class AuthorizationWebMvcTest extends AbstractIntegrationTest {
     @Test
     void marketplace_json_is_public() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/marketplace.json"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void list_submissions_requires_admin_role() throws Exception {
+        Mockito.when(review.listSubmissions(any())).thenReturn(List.of());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/submissions")
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/submissions")
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    void start_review_requires_admin_role() throws Exception {
+        mvc.perform(post("/api/submissions/1/review").with(csrf())
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/submissions/1/review").with(csrf())
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    void reject_requires_admin_role() throws Exception {
+        mvc.perform(post("/api/submissions/1/reject").with(csrf())
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/submissions/1/reject").with(csrf())
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().is2xxSuccessful());
+    }
+
+    @Test
+    void healthz_is_public() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/healthz"))
                 .andExpect(status().isOk());
     }
 }
