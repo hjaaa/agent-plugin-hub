@@ -78,4 +78,21 @@ class MarketplaceServiceTest {
 
         assertThat(m.plugins()).extracting(PluginRef::name).containsExactly("bundled"); // 依赖已 bundle → 广告
     }
+
+    @Test
+    void should_advertise_plugin_with_bundle_dependencies_true() throws Exception {
+        PluginCatalog catalog = mock(PluginCatalog.class);
+        ArtifactStore store = mock(ArtifactStore.class);
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/boolbundle\",\"version\":\"1.0.0\",\"dependencies\":{\"left-pad\":\"^1.3.0\"},\"bundleDependencies\":true}");
+        PluginEntry p = new PluginEntry("@demo/boolbundle", "boolbundle", "b",
+                Map.of("latest", "1.0.0"), List.of(new VersionEntry("1.0.0", "demo-boolbundle-1.0.0.tgz")));
+        when(catalog.all()).thenReturn(List.of(p));
+        when(store.load("demo-boolbundle-1.0.0.tgz")).thenReturn(tgz);
+
+        Marketplace m = new MarketplaceService(catalog, store, new TarballManifestReader(new ObjectMapper()))
+                .render("http://h");
+
+        assertThat(m.plugins()).extracting(PluginRef::name).containsExactly("boolbundle");
+    }
 }

@@ -102,7 +102,18 @@ public class MarketplaceService {
                 ? manifest.get("bundleDependencies")
                 : manifest.get("bundledDependencies");
         Set<String> names = new HashSet<>();
-        if (b != null && b.isArray()) {
+        if (b == null) {
+            return names;
+        }
+        // bundleDependencies: true 表示 dependencies 全部打包进 tarball
+        if (b.isBoolean() && b.asBoolean()) {
+            JsonNode deps = manifest.get("dependencies");
+            if (deps != null && deps.isObject()) {
+                deps.fieldNames().forEachRemaining(names::add);
+            }
+            return names;
+        }
+        if (b.isArray()) {
             b.forEach(n -> names.add(n.asText()));
         }
         return names;
