@@ -16,7 +16,7 @@ import org.springframework.security.web.firewall.StrictHttpFirewall;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({SecurityProperties.class, RegistryAuthProperties.class})
 public class SecurityConfig {
 
     // npm 客户端在 URL 路径中使用 %2F 编码作用域斜杠(如 @demo%2Fpkg);
@@ -28,8 +28,28 @@ public class SecurityConfig {
         return web -> web.httpFirewall(firewall);
     }
 
+    // 机器平面:仅当 app.registry.auth.enabled=true 时启用;stateless + bearer token。
+    // 关闭时本 bean 不存在,/registry/** 落到 webFilterChain 的 permitAll。
+    @Bean
+    @org.springframework.core.annotation.Order(1)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            name = "app.registry.auth.enabled", havingValue = "true")
+    public SecurityFilterChain registryFilterChain(
+            HttpSecurity http, RegistryTokenService tokenService) throws Exception {
+        http
+                .securityMatcher("/registry/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(sm -> sm.sessionCreationPolicy(
+                        org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .addFilterBefore(new RegistryTokenAuthFilter(tokenService),
+                        org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
     // Web 平面:对 CC 与运维放行的公共端点 + OIDC 登录保护的 /api/**
-    // /registry/** 暂时放行;Task 9 再加机器链覆盖
+    // /registry/** 在 auth.enabled=false 时由此链 permitAll 放行;
+    // 启用后由 @Order(1) 的 registryFilterChain 优先匹配,本链不再处理 /registry/**。
     @Bean
     public SecurityFilterChain webFilterChain(
             HttpSecurity http,

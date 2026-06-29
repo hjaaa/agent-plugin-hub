@@ -36,3 +36,6 @@ app:
     region: ${S3_REGION:us-east-1}
   security:
     bootstrap-admin-subject: ${BOOTSTRAP_ADMIN_SUBJECT:}
+  registry:
+    auth:
+      enabled: ${REGISTRY_AUTH_ENABLED:false}
