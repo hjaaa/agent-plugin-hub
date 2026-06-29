@@ -69,7 +69,12 @@ class RealNpmInstallTest extends AbstractIntegrationTest {
     }
 
     private static int runProcess(File dir, String... cmd) throws Exception {
-        Process p = new ProcessBuilder(cmd).directory(dir).inheritIO().start();
+        // 不继承 stdin:inheritIO() 会把 Surefire 的 stdin 传给子进程,
+        // npm 退出时关闭 stdin 会损坏 Surefire 的通信通道导致 BUILD FAILURE。
+        Process p = new ProcessBuilder(cmd).directory(dir)
+                .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
         return p.waitFor();
     }
 }

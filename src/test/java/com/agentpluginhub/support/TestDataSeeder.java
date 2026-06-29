@@ -31,9 +31,9 @@ public class TestDataSeeder {
             String tarballRef, byte[] tarball) {
         Plugin plugin = plugins.findByPackageName(packageName)
                 .orElseGet(() -> plugins.save(new Plugin(packageName, pluginName, "demo", "team")));
-        store.save(tarballRef, tarball);
         // 幂等:同一版本已存在则跳过插入,避免跨测试类共享容器时违反唯一约束
         if (versions.findByPluginIdAndVersion(plugin.getId(), version).isEmpty()) {
+            store.save(tarballRef, tarball);
             PluginVersion pv = new PluginVersion();
             pv.setPluginId(plugin.getId());
             pv.setVersion(version);
