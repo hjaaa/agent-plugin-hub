@@ -30,20 +30,24 @@ public class DevDataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        if (plugins.findByPackageName("@demo/hello-plugin").isPresent()) {
-            return;
+        try {
+            if (plugins.findByPackageName("@demo/hello-plugin").isPresent()) {
+                return;
+            }
+            ClassPathResource res = new ClassPathResource("dev/demo-hello-plugin-1.0.0.tgz");
+            if (!res.exists()) {
+                log.warn("dev seed tarball missing at classpath dev/demo-hello-plugin-1.0.0.tgz; skip seeding");
+                return;
+            }
+            byte[] tarball;
+            try (InputStream in = res.getInputStream()) {
+                tarball = in.readAllBytes();
+            }
+            Long id = publishing.publish(tarball, "dev-seeder");
+            review.approve(id, "dev-admin", "dev seed");
+            log.info("dev seed: published @demo/hello-plugin@1.0.0");
+        } catch (Exception e) {
+            log.warn("dev seed failed, skip; {}", e.getMessage());
         }
-        ClassPathResource res = new ClassPathResource("dev/demo-hello-plugin-1.0.0.tgz");
-        if (!res.exists()) {
-            log.warn("dev seed tarball missing at classpath dev/demo-hello-plugin-1.0.0.tgz; skip seeding");
-            return;
-        }
-        byte[] tarball;
-        try (InputStream in = res.getInputStream()) {
-            tarball = in.readAllBytes();
-        }
-        Long id = publishing.publish(tarball, "dev-seeder");
-        review.approve(id, "dev-admin", "dev seed");
-        log.info("dev seed: published @demo/hello-plugin@1.0.0");
     }
 }

@@ -19,10 +19,18 @@ spring:
             client-id: ${OIDC_CLIENT_ID:changeme}
             client-secret: ${OIDC_CLIENT_SECRET:changeme}
             scope: [openid, profile, email]
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/company"
             provider: company
         provider:
           company:
-            issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/agent-plugin-hub}
+            # 使用显式端点而非 issuer-uri,避免启动期阻塞式 OIDC discovery。
+            # 生产部署时通过环境变量注入真实 IdP 的端点;dev 环境无需 IdP 即可启动。
+            authorization-uri: ${OIDC_AUTH_URI:http://localhost:8081/realms/agent-plugin-hub/protocol/openid-connect/auth}
+            token-uri: ${OIDC_TOKEN_URI:http://localhost:8081/realms/agent-plugin-hub/protocol/openid-connect/token}
+            jwk-set-uri: ${OIDC_JWK_URI:http://localhost:8081/realms/agent-plugin-hub/protocol/openid-connect/certs}
+            user-info-uri: ${OIDC_USERINFO_URI:http://localhost:8081/realms/agent-plugin-hub/protocol/openid-connect/userinfo}
+            user-name-attribute: sub
 app:
   # M1 制品存储改 S3/MinIO(Task 3 接);保留本地目录用于 dev/部分测试
   artifacts-dir: ./artifacts

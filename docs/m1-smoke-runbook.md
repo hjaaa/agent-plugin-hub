@@ -5,12 +5,19 @@
 ## 前置
 - Docker 运行中。
 - 起依赖:`docker compose up -d`(MySQL:3306,MinIO:9000/9001)。
-- 构建:`export JAVA_HOME=/Users/richardhuang/devsoft/jdk-21.0.10.jdk/Contents/Home && mvn test` 全绿(需 Docker)。
+- 构建:`export JAVA_HOME=<本机 JDK 17+ 路径> && mvn test` 全绿(需 Docker)。
 
 ## 启动(dev profile,自动种子演示插件)
+
+> **说明**:dev profile 使用显式 OAuth2 端点占位,不做启动期 OIDC discovery,**无需真实 IdP 即可启动**。
+> `/marketplace.json` 与 `/registry/**`(install 冒烟路线 i)无需认证,可直接访问。
+> 若需真实 OIDC 登录(发布/审批接口),请通过环境变量 `OIDC_AUTH_URI`/`OIDC_TOKEN_URI`/`OIDC_JWK_URI`/`OIDC_USERINFO_URI` 配置真实 IdP 端点。
+
 ```bash
-export JAVA_HOME=/Users/richardhuang/devsoft/jdk-21.0.10.jdk/Contents/Home
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# 请将 <JAVA_HOME> 替换为本机 JDK 17+ 的实际路径,例如:
+# export JAVA_HOME=/path/to/jdk-21  (macOS: /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home)
+export JAVA_HOME=<JAVA_HOME>
+~/devsoft/apache-maven-3.9.11/bin/mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # 自检:
 curl -s http://localhost:8080/marketplace.json          # 应含 hello-plugin / @demo/hello-plugin
 curl -s http://localhost:8080/registry/@demo%2Fhello-plugin

@@ -30,9 +30,10 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
     }
 
-    // 非法状态跃迁 / 并发审批冲突 → 409
+    // 非法状态跃迁 / 并发审批冲突 / 唯一约束冲突(并发双发布撞 uk_version_plugin_ver) → 409
     @ExceptionHandler({com.agentpluginhub.review.IllegalTransitionException.class,
-            org.springframework.dao.OptimisticLockingFailureException.class})
+            org.springframework.dao.OptimisticLockingFailureException.class,
+            org.springframework.dao.DataIntegrityViolationException.class})
     public ResponseEntity<Map<String, String>> handleConflict(Exception ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
     }
