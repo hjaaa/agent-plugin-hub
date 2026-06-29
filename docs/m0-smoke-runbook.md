@@ -58,6 +58,10 @@ curl -s http://localhost:8080/registry/@demo%2Fhello-plugin
 
 ## 验收记录(执行后填写)
 
-- [ ] 路线 (i) 通过 —— CC 版本:____,日期:____
+- [x] 路线 (i) 通过 —— CC 版本:本机 Claude Code CLI,日期:2026-06-29
+  - `marketplace add http://localhost:8080/marketplace.json` → "Successfully added marketplace: agent-plugin-hub"
+  - `install hello-plugin@agent-plugin-hub` → "✓ Installed hello-plugin";`/reload-plugins` 插件数 9 → 10
+  - `/hello-plugin:hello` 正常输出 "hello from agent-plugin-hub M0 plugin ✅"
+  - 旁证:`curl` 验证 marketplace.json/packument/tarball 均正确;真实 `npm install --registry=http://localhost:8080/registry` 直连服务安装成功
 - [ ] 路线 (ii) 通过 —— CC 版本:____,日期:____,转用原因:____
 - [ ] 均不通过 —— 报错原文与结论:____
