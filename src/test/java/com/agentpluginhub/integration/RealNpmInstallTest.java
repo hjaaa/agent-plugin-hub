@@ -49,9 +49,8 @@ class RealNpmInstallTest {
                 """);
 
         ctx = new SpringApplicationBuilder(AgentPluginHubApplication.class)
-                .properties("server.port=0",
-                        "app.artifacts-dir=" + artifacts.toAbsolutePath())
-                .run();
+                .run("--server.port=0",
+                        "--app.artifacts-dir=" + artifacts.toAbsolutePath());
         port = Integer.parseInt(ctx.getEnvironment().getProperty("local.server.port"));
     }
 
