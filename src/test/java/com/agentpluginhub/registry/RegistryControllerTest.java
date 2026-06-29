@@ -2,24 +2,41 @@ package com.agentpluginhub.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.agentpluginhub.support.TestDataSeeder;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import com.agentpluginhub.support.AbstractIntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(properties = "app.artifacts-dir=src/test/resources/fixtures/artifacts")
+@TestPropertySource(properties = "app.storage.type=local")
 class RegistryControllerTest extends AbstractIntegrationTest {
 
     @LocalServerPort
     int port;
 
+    @Autowired
+    TestDataSeeder seeder;
+
     private final HttpClient http = HttpClient.newHttpClient();
+
+    @BeforeEach
+    void seed() throws Exception {
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/hello-plugin\",\"version\":\"1.0.0\"}");
+        if (seeder == null) {
+            return;
+        }
+        seeder.publish("@demo/hello-plugin", "hello-plugin", "1.0.0",
+                "demo-hello-plugin-1.0.0.tgz", tgz);
+    }
 
     private HttpResponse<String> getString(String rawPath) throws Exception {
         URI uri = URI.create("http://localhost:" + port + rawPath);
@@ -58,14 +75,12 @@ class RegistryControllerTest extends AbstractIntegrationTest {
         assertThat(res.statusCode()).isEqualTo(404);
     }
 
-    // 回归:tarball 端点必须校验包归属——真实存在的文件名但属于未知包 → 404
     @Test
     void should_return_404_when_tarball_package_unknown() throws Exception {
         HttpResponse<String> res = getString("/registry/@demo/missing/-/demo-hello-plugin-1.0.0.tgz");
         assertThat(res.statusCode()).isEqualTo(404);
     }
 
-    // 已知包,但请求的文件名不是该包任何已登记版本的 tarball → 404
     @Test
     void should_return_404_when_tarball_filename_not_a_listed_version() throws Exception {
         HttpResponse<String> res = getString("/registry/@demo/hello-plugin/-/demo-hello-plugin-9.9.9.tgz");
