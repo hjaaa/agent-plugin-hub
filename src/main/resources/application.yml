@@ -11,6 +11,18 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  security:
+    oauth2:
+      client:
+        registration:
+          company:
+            client-id: ${OIDC_CLIENT_ID:changeme}
+            client-secret: ${OIDC_CLIENT_SECRET:changeme}
+            scope: [openid, profile, email]
+            provider: company
+        provider:
+          company:
+            issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/agent-plugin-hub}
 app:
   # M1 制品存储改 S3/MinIO(Task 3 接);保留本地目录用于 dev/部分测试
   artifacts-dir: ./artifacts
@@ -22,3 +34,5 @@ app:
     secret-key: ${S3_SECRET_KEY:minioadmin}
     bucket: ${S3_BUCKET:agent-plugin-hub}
     region: ${S3_REGION:us-east-1}
+  security:
+    bootstrap-admin-subject: ${BOOTSTRAP_ADMIN_SUBJECT:}
