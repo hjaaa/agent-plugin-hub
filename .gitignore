@@ -1,0 +1,8 @@
+target/
+artifacts/
+node_modules/
+*.tgz
+.idea/
+*.iml
+.DS_Store
+.superpowers/
