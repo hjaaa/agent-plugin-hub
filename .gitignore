@@ -2,6 +2,7 @@ target/
 artifacts/
 node_modules/
 *.tgz
+!src/main/resources/dev/*.tgz
 .idea/
 *.iml
 .DS_Store
