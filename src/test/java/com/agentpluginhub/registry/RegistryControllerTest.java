@@ -56,4 +56,18 @@ class RegistryControllerTest {
         HttpResponse<String> res = getString("/registry/@demo/missing");
         assertThat(res.statusCode()).isEqualTo(404);
     }
+
+    // 回归:tarball 端点必须校验包归属——真实存在的文件名但属于未知包 → 404
+    @Test
+    void should_return_404_when_tarball_package_unknown() throws Exception {
+        HttpResponse<String> res = getString("/registry/@demo/missing/-/demo-hello-plugin-1.0.0.tgz");
+        assertThat(res.statusCode()).isEqualTo(404);
+    }
+
+    // 已知包,但请求的文件名不是该包任何已登记版本的 tarball → 404
+    @Test
+    void should_return_404_when_tarball_filename_not_a_listed_version() throws Exception {
+        HttpResponse<String> res = getString("/registry/@demo/hello-plugin/-/demo-hello-plugin-9.9.9.tgz");
+        assertThat(res.statusCode()).isEqualTo(404);
+    }
 }
