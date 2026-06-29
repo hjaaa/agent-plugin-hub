@@ -30,7 +30,7 @@ curl -s http://localhost:8080/registry/@demo%2Fhello-plugin
 验证:
 
 ```
-/hello
+/hello-plugin:hello
 ```
 
 预期:输出 `hello from agent-plugin-hub M0 plugin ✅`。
@@ -48,7 +48,7 @@ curl -s http://localhost:8080/registry/@demo%2Fhello-plugin
    ```
    /plugin marketplace add <私有仓 git url>
    /plugin install hello-plugin@agent-plugin-hub
-   /hello
+   /hello-plugin:hello
    ```
 4. 若成功 → 里程碑 0 **GO**(路线 ii)。registry 仍由本服务动态提供,仅 manifest 改为 git 分发。
 
