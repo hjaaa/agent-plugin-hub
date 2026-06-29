@@ -64,7 +64,7 @@ public class Submission {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected Submission() {
+    public Submission() {
     }
 
     public Long getId() { return id; }
