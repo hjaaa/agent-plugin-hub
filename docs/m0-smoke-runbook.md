@@ -2,6 +2,10 @@
 
 目的:在**真实 Claude Code** 里验证「自建 npm registry + 动态 marketplace.json」能被原生 `marketplace add` + `install` 装上。这是 M0 的唯一验收证据。
 
+## M0 范围限制:仅自包含插件
+
+M0 的 registry 只服务自家已登记的包,不代理上游 npm。因此**仅支持自包含插件**:插件 `package.json` 不应声明需从 registry 解析的外部 `dependencies`(依赖须 bundle 进 tarball,或无外部依赖)。带外部依赖的插件会在 `marketplace.json` 渲染时被**跳过(不广告)**,以免"列出来却装不上"。上游代理/镜像与发布期校验留待 M1。
+
 ## 前置
 
 - 已构建通过:`export JAVA_HOME=/Users/richardhuang/devsoft/jdk-21.0.10.jdk/Contents/Home && mvn test` 全绿。
