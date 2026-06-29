@@ -32,4 +32,28 @@ class LocalArtifactStoreTest {
         assertThatThrownBy(() -> newStore().load("../application.yml"))
                 .isInstanceOf(ArtifactNotFoundException.class);
     }
+
+    @Test
+    void should_reject_when_filename_is_null() {
+        assertThatThrownBy(() -> newStore().load(null))
+                .isInstanceOf(ArtifactNotFoundException.class);
+    }
+
+    @Test
+    void should_reject_when_filename_is_blank() {
+        assertThatThrownBy(() -> newStore().load("   "))
+                .isInstanceOf(ArtifactNotFoundException.class);
+    }
+
+    @Test
+    void should_reject_when_filename_contains_forward_slash() {
+        assertThatThrownBy(() -> newStore().load("sub/evil.tgz"))
+                .isInstanceOf(ArtifactNotFoundException.class);
+    }
+
+    @Test
+    void should_reject_when_filename_contains_backslash() {
+        assertThatThrownBy(() -> newStore().load("sub\\evil.tgz"))
+                .isInstanceOf(ArtifactNotFoundException.class);
+    }
 }
