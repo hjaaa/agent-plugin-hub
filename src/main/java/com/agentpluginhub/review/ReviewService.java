@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 // ③审核工作流:状态机 + 审批副作用(落 PUBLISHED、移 blob、设 latest)。
 // 并发审批靠 Submission 的 @Version 乐观锁(冲突抛 OptimisticLockingFailureException)。
@@ -98,6 +100,8 @@ public class ReviewService {
         // 抢占成功后再把 pending blob 复制到 canonical key(只有赢家执行到这里)
         byte[] bytes = store.load(s.getTarballRef());
         store.save(canonicalKey, bytes);
+        // pending blob 已复制到 canonical,提交后清理 pending(本提交成功才删)
+        deletePendingAfterCommit(s.getTarballRef());
 
         // 设/移 latest 指针(审批自动推进)+ 审计
         Instant ts = Instant.now();
@@ -127,6 +131,7 @@ public class ReviewService {
         s.setReviewNotes(notes);
         s.setUpdatedAt(Instant.now());
         submissions.save(s);
+        deletePendingAfterCommit(s.getTarballRef());
     }
 
     private Submission require(Long id) {
@@ -138,5 +143,15 @@ public class ReviewService {
         if (s.getState() != SubmissionState.SUBMITTED && s.getState() != SubmissionState.UNDER_REVIEW) {
             throw new IllegalTransitionException("当前状态不可审批:" + s.getState());
         }
+    }
+
+    // 事务提交后再删 pending blob:回滚则保留供重试,提交才清理 —— 避免 DB/blob 不一致与孤儿堆积
+    private void deletePendingAfterCommit(String pendingKey) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                store.delete(pendingKey);
+            }
+        });
     }
 }

@@ -164,4 +164,30 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         assertThat(distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow().getVersion())
                 .isEqualTo("1.0.0");   // stable 不随审批推进
     }
+
+    @Test
+    void approve_deletes_pending_blob_and_keeps_canonical() throws Exception {
+        byte[] bytes = plugin("@demo/p7g", "1.0.0");
+        Long id = publishing.publish(bytes, "alice");
+        String pendingKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";
+        assertThat(store.exists(pendingKey)).isTrue();
+
+        review.approve(id, "admin", "ok");
+
+        String canonicalKey = "demo-p7g-1.0.0-" + IntegrityUtil.hexSha1(bytes).substring(0, 12) + ".tgz";
+        assertThat(store.exists(canonicalKey)).isTrue();    // canonical 仍在
+        assertThat(store.exists(pendingKey)).isFalse();     // 提交后 pending 已清理
+    }
+
+    @Test
+    void reject_deletes_pending_blob() throws Exception {
+        byte[] bytes = plugin("@demo/p7h", "1.0.0");
+        Long id = publishing.publish(bytes, "alice");
+        String pendingKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";
+        assertThat(store.exists(pendingKey)).isTrue();
+
+        review.reject(id, "admin", "no");
+
+        assertThat(store.exists(pendingKey)).isFalse();
+    }
 }

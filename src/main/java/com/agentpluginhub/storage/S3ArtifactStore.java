@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -71,5 +72,11 @@ public class S3ArtifactStore implements ArtifactStore {
             }
             throw e;
         }
+    }
+
+    @Override
+    public void delete(String key) {
+        // S3 deleteObject 对不存在的 key 也返回成功(幂等)
+        s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     }
 }
