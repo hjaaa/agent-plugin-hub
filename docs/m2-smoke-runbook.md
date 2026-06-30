@@ -138,14 +138,14 @@ S3_AUTO_CREATE_BUCKET: "false"
 
 ### 反代 X-Forwarded-* 注意事项
 
-`application.yml` 已配 `server.forward-headers-strategy: framework`。反代(nginx/ALB/Kong)须透传 `X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`(以及可选的 `X-Forwarded-Port`),否则 registry packument 中生成的 tarball 下载绝对 URL 会携带错误的协议或主机名,导致 `claude code install` 失败。
+`application.yml` 已配 `server.forward-headers-strategy: framework`。可信反代(nginx/ALB/Kong)必须**覆盖/设置**(而非透传客户端的)`X-Forwarded-Host` 与 `X-Forwarded-Proto`,且应用**不得直接暴露公网**;否则 registry packument 中生成的 tarball 下载绝对 URL 可被客户端伪造的 `X-Forwarded-Host` 头投毒,导致 `claude code install` 下载到攻击者指定的地址。`X-Forwarded-For` 由反代追加即可。
 
 nginx 示例配置:
 
 ```nginx
 proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-Host  $host;
+proxy_set_header X-Forwarded-Proto $scheme;        # 反代覆盖,不透传客户端值
+proxy_set_header X-Forwarded-Host  $host;          # 反代覆盖,不透传客户端值
 proxy_set_header X-Forwarded-Port  $server_port;
 ```
 
