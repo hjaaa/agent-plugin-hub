@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class ReviewService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReviewService.class);
     private static final String PUBLISHED = "PUBLISHED";
 
     private final SubmissionRepository submissions;
@@ -151,7 +152,12 @@ public class ReviewService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                store.delete(pendingKey);
+                try {
+                    store.delete(pendingKey);
+                } catch (RuntimeException e) {
+                    // pending 清理是 best-effort:事务已提交,清理失败不得影响审批结果,仅告警
+                    log.warn("failed to delete pending blob after commit: {}", pendingKey, e);
+                }
             }
         });
     }
