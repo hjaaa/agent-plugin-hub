@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.agentpluginhub.common.ArtifactNotFoundException;
 import com.agentpluginhub.config.AppProperties;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LocalArtifactStoreTest {
@@ -55,5 +57,18 @@ class LocalArtifactStoreTest {
     void should_reject_when_filename_contains_backslash() {
         assertThatThrownBy(() -> newStore().load("sub\\evil.tgz"))
                 .isInstanceOf(ArtifactNotFoundException.class);
+    }
+
+    @Test
+    void should_save_then_load_and_report_exists() throws Exception {
+        Path dir = Files.createTempDirectory("aph-local");
+        AppProperties props = new AppProperties();
+        props.setArtifactsDir(dir.toString());
+        LocalArtifactStore store = new LocalArtifactStore(props);
+
+        assertThat(store.exists("a.tgz")).isFalse();
+        store.save("a.tgz", new byte[]{1, 2, 3});
+        assertThat(store.exists("a.tgz")).isTrue();
+        assertThat(store.load("a.tgz")).containsExactly(1, 2, 3);
     }
 }

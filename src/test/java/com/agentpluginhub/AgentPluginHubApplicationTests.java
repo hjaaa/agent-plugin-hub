@@ -1,10 +1,9 @@
 package com.agentpluginhub;
 
+import com.agentpluginhub.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class AgentPluginHubApplicationTests {
+class AgentPluginHubApplicationTests extends AbstractIntegrationTest {
 
     @Test
     void should_load_context_when_app_starts() {

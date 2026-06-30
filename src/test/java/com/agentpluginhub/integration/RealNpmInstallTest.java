@@ -2,63 +2,43 @@ package com.agentpluginhub.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.agentpluginhub.AgentPluginHubApplication;
+import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.agentpluginhub.support.TestDataSeeder;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.TestPropertySource;
 
-class RealNpmInstallTest {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = {"app.storage.type=local", "app.registry.auth.enabled=false"})
+class RealNpmInstallTest extends AbstractIntegrationTest {
 
-    private static ConfigurableApplicationContext ctx;
-    private static int port;
-    private static Path tmp;
+    @LocalServerPort
+    int port;
 
-    @BeforeAll
-    static void boot() throws Exception {
+    @Autowired
+    TestDataSeeder seeder;
+
+    private Path tmp;
+
+    @BeforeEach
+    void seed() throws Exception {
         Assumptions.assumeTrue(commandExists("npm"), "npm 不可用,跳过真实 npm install 集成测试");
-
         tmp = Files.createTempDirectory("aph-it");
-        Path artifacts = tmp.resolve("artifacts");
-        Files.createDirectories(artifacts);
-
-        // 把样例插件打成真实 tarball 放进临时 artifacts 目录
+        Path packDir = tmp.resolve("pack");
+        Files.createDirectories(packDir);
         int packCode = runProcess(new File("examples/hello-plugin"),
-                "npm", "pack", "--pack-destination", artifacts.toAbsolutePath().toString());
+                "npm", "pack", "--pack-destination", packDir.toAbsolutePath().toString());
         assertThat(packCode).isEqualTo(0);
-
-        Files.writeString(artifacts.resolve("index.json"), """
-                {
-                  "plugins": [
-                    {
-                      "package": "@demo/hello-plugin",
-                      "pluginName": "hello-plugin",
-                      "description": "demo",
-                      "distTags": { "latest": "1.0.0" },
-                      "versions": [
-                        { "version": "1.0.0", "tarball": "demo-hello-plugin-1.0.0.tgz" }
-                      ]
-                    }
-                  ]
-                }
-                """);
-
-        ctx = new SpringApplicationBuilder(AgentPluginHubApplication.class)
-                .run("--server.port=0",
-                        "--app.artifacts-dir=" + artifacts.toAbsolutePath());
-        port = Integer.parseInt(ctx.getEnvironment().getProperty("local.server.port"));
-    }
-
-    @AfterAll
-    static void shutdown() {
-        if (ctx != null) {
-            ctx.close();
-        }
+        byte[] tgz = Files.readAllBytes(packDir.resolve("demo-hello-plugin-1.0.0.tgz"));
+        seeder.publish("@demo/hello-plugin", "hello-plugin", "1.0.0",
+                "demo-hello-plugin-1.0.0.tgz", tgz);
     }
 
     @Test
@@ -89,7 +69,12 @@ class RealNpmInstallTest {
     }
 
     private static int runProcess(File dir, String... cmd) throws Exception {
-        Process p = new ProcessBuilder(cmd).directory(dir).inheritIO().start();
+        // 不继承 stdin:inheritIO() 会把 Surefire 的 stdin 传给子进程,
+        // npm 退出时关闭 stdin 会损坏 Surefire 的通信通道导致 BUILD FAILURE。
+        Process p = new ProcessBuilder(cmd).directory(dir)
+                .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
         return p.waitFor();
     }
 }

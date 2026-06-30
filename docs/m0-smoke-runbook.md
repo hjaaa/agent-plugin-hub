@@ -1,3 +1,5 @@
+> 注:M1 已上线发布/审核闭环,本 M0 手册的 index.json 路线已被 DB 取代。新冒烟见 docs/m1-smoke-runbook.md。
+
 # 里程碑 0 真机冒烟手册(Claude Code)
 
 目的:在**真实 Claude Code** 里验证「自建 npm registry + 动态 marketplace.json」能被原生 `marketplace add` + `install` 装上。这是 M0 的唯一验收证据。

@@ -1,68 +1,70 @@
 package com.agentpluginhub.catalog;
 
-import com.agentpluginhub.catalog.model.CatalogIndex;
 import com.agentpluginhub.catalog.model.PluginEntry;
+import com.agentpluginhub.catalog.model.VersionEntry;
 import com.agentpluginhub.common.PackageNotFoundException;
-import com.agentpluginhub.config.AppProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.agentpluginhub.domain.DistTag;
+import com.agentpluginhub.domain.DistTagRepository;
+import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.domain.PluginRepository;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.domain.PluginVersionRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+// M1:从 DB 构建只读目录视图。仅暴露含 PUBLISHED 版本的插件;dist-tags 取自 dist_tag 表。
+// 保持 M0 的 all()/find()/require() 与 PluginEntry/VersionEntry 形状不变,上游读路径无感。
 @Component
 public class PluginCatalog {
 
-    private static final Logger log = LoggerFactory.getLogger(PluginCatalog.class);
+    private static final String PUBLISHED = "PUBLISHED";
 
-    private final Map<String, PluginEntry> byPackage = new LinkedHashMap<>();
-    private final AppProperties props;
-    private final ObjectMapper mapper;
+    private final PluginRepository plugins;
+    private final PluginVersionRepository versions;
+    private final DistTagRepository distTags;
 
-    public PluginCatalog(AppProperties props, ObjectMapper mapper) {
-        this.props = props;
-        this.mapper = mapper;
-    }
-
-    // 启动时一次性加载 index.json;M0 手工维护,缺失则目录为空(允许空仓启动)
-    @PostConstruct
-    public void load() throws IOException {
-        byPackage.clear();
-        Path index = Path.of(props.getArtifactsDir(), "index.json");
-        if (!Files.exists(index)) {
-            log.warn("artifacts index.json not found at {}, catalog is empty", index.toAbsolutePath());
-            return;
-        }
-        CatalogIndex idx = mapper.readValue(Files.readAllBytes(index), CatalogIndex.class);
-        if (idx.plugins() != null) {
-            for (PluginEntry e : idx.plugins()) {
-                byPackage.put(e.packageName(), e);
-            }
-        }
-        log.info("loaded {} plugin(s) from {}", byPackage.size(), index.toAbsolutePath());
+    public PluginCatalog(PluginRepository plugins, PluginVersionRepository versions,
+            DistTagRepository distTags) {
+        this.plugins = plugins;
+        this.versions = versions;
+        this.distTags = distTags;
     }
 
     public List<PluginEntry> all() {
-        return new ArrayList<>(byPackage.values());
+        List<PluginEntry> result = new ArrayList<>();
+        for (Plugin p : plugins.findAll()) {
+            toEntry(p).ifPresent(result::add);
+        }
+        return result;
     }
 
     public Optional<PluginEntry> find(String packageName) {
-        return Optional.ofNullable(byPackage.get(packageName));
+        return plugins.findByPackageName(packageName).flatMap(this::toEntry);
     }
 
     public PluginEntry require(String packageName) {
-        PluginEntry e = byPackage.get(packageName);
-        if (e == null) {
-            throw new PackageNotFoundException(packageName);
+        return find(packageName).orElseThrow(() -> new PackageNotFoundException(packageName));
+    }
+
+    // 把一个 Plugin 聚合成 PluginEntry;无 PUBLISHED 版本则视为不存在(Optional.empty)
+    private Optional<PluginEntry> toEntry(Plugin p) {
+        List<PluginVersion> published = versions.findByPluginIdAndStatus(p.getId(), PUBLISHED);
+        if (published.isEmpty()) {
+            return Optional.empty();
         }
-        return e;
+        List<VersionEntry> vs = new ArrayList<>();
+        for (PluginVersion pv : published) {
+            vs.add(new VersionEntry(pv.getVersion(), pv.getTarballRef()));
+        }
+        Map<String, String> tags = new LinkedHashMap<>();
+        for (DistTag t : distTags.findByPluginId(p.getId())) {
+            tags.put(t.getTag(), t.getVersion());
+        }
+        return Optional.of(new PluginEntry(p.getPackageName(), p.getPluginName(),
+                p.getDescription(), tags, vs));
     }
 }

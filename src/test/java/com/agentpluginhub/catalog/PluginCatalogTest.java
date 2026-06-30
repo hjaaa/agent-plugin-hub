@@ -6,24 +6,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.agentpluginhub.catalog.model.PluginEntry;
 import com.agentpluginhub.catalog.model.VersionEntry;
 import com.agentpluginhub.common.PackageNotFoundException;
-import com.agentpluginhub.config.AppProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.agentpluginhub.registry.TarballTestSupport;
+import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.agentpluginhub.support.TestDataSeeder;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
-class PluginCatalogTest {
+class PluginCatalogTest extends AbstractIntegrationTest {
 
-    private PluginCatalog catalogOn(String dir) throws Exception {
-        AppProperties props = new AppProperties();
-        props.setArtifactsDir(dir);
-        PluginCatalog catalog = new PluginCatalog(props, new ObjectMapper());
-        catalog.load();
-        return catalog;
-    }
+    @Autowired PluginCatalog catalog;
+    @Autowired TestDataSeeder seeder;
 
     @Test
-    void should_load_plugins_when_index_present() throws Exception {
-        PluginCatalog catalog = catalogOn("src/test/resources/fixtures/artifacts");
-        assertThat(catalog.all()).hasSize(1);
+    void should_expose_published_plugin_from_db() throws Exception {
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/hello-plugin\",\"version\":\"1.0.0\"}");
+        seeder.publish("@demo/hello-plugin", "hello-plugin", "1.0.0",
+                "demo-hello-plugin-1.0.0.tgz", tgz);
 
         PluginEntry e = catalog.require("@demo/hello-plugin");
         assertThat(e.pluginName()).isEqualTo("hello-plugin");
@@ -34,15 +33,8 @@ class PluginCatalogTest {
     }
 
     @Test
-    void should_throw_when_package_unknown() throws Exception {
-        PluginCatalog catalog = catalogOn("src/test/resources/fixtures/artifacts");
+    void should_throw_when_package_unknown() {
         assertThatThrownBy(() -> catalog.require("@x/none"))
                 .isInstanceOf(PackageNotFoundException.class);
-    }
-
-    @Test
-    void should_be_empty_when_index_missing() throws Exception {
-        PluginCatalog catalog = catalogOn("src/test/resources/fixtures/no-such-dir");
-        assertThat(catalog.all()).isEmpty();
     }
 }

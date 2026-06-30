@@ -2,23 +2,38 @@ package com.agentpluginhub.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.agentpluginhub.support.TestDataSeeder;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestPropertySource(properties = "app.artifacts-dir=src/test/resources/fixtures/artifacts")
-class RegistryControllerTest {
+@TestPropertySource(properties = "app.storage.type=local")
+class RegistryControllerTest extends AbstractIntegrationTest {
 
     @LocalServerPort
     int port;
 
+    @Autowired
+    TestDataSeeder seeder;
+
     private final HttpClient http = HttpClient.newHttpClient();
+
+    @BeforeEach
+    void seed() throws Exception {
+        byte[] tgz = TarballTestSupport.tgzWithPackageJson(
+                "{\"name\":\"@demo/hello-plugin\",\"version\":\"1.0.0\"}");
+        seeder.publish("@demo/hello-plugin", "hello-plugin", "1.0.0",
+                "demo-hello-plugin-1.0.0.tgz", tgz);
+    }
 
     private HttpResponse<String> getString(String rawPath) throws Exception {
         URI uri = URI.create("http://localhost:" + port + rawPath);
