@@ -6,12 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.review.ReviewService;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import com.agentpluginhub.support.TestTarballs;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +32,8 @@ class DistTagControllerIT extends AbstractIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired PublishingService publishing;
     @Autowired ReviewService review;
-    @Autowired PluginRepository plugins;
-    @Autowired PluginVersionRepository versions;
+    @Autowired PluginMapper plugins;
+    @Autowired PluginVersionMapper versions;
 
     private static final String PKG = "@demo/dtit";
 
@@ -46,8 +50,12 @@ class DistTagControllerIT extends AbstractIntegrationTest {
     }
 
     private boolean alreadyPublished(String version) {
-        return plugins.findByPackageName(PKG)
-                .map(p -> versions.existsByPluginIdAndVersionAndStatus(p.getId(), version, "PUBLISHED"))
+        return MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                        .eq(Plugin::getPackageName, PKG))
+                .map(p -> MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                        .eq(PluginVersion::getPluginId, p.getId())
+                        .eq(PluginVersion::getVersion, version)
+                        .eq(PluginVersion::getStatus, "PUBLISHED")))
                 .orElse(false);
     }
 

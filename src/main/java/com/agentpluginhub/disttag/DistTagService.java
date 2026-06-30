@@ -3,11 +3,14 @@ package com.agentpluginhub.disttag;
 import com.agentpluginhub.common.PackageNotFoundException;
 import com.agentpluginhub.common.VersionNotFoundException;
 import com.agentpluginhub.domain.DistTag;
-import com.agentpluginhub.domain.DistTagRepository;
 import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.agentpluginhub.publish.ValidationException;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,12 +25,12 @@ public class DistTagService {
     private static final String PUBLISHED = "PUBLISHED";
     private static final Set<String> ALLOWED_TAGS = Set.of("latest", "stable");
 
-    private final PluginRepository plugins;
-    private final PluginVersionRepository versions;
-    private final DistTagRepository distTags;
+    private final PluginMapper plugins;
+    private final PluginVersionMapper versions;
+    private final DistTagMapper distTags;
 
-    public DistTagService(PluginRepository plugins, PluginVersionRepository versions,
-            DistTagRepository distTags) {
+    public DistTagService(PluginMapper plugins, PluginVersionMapper versions,
+            DistTagMapper distTags) {
         this.plugins = plugins;
         this.versions = versions;
         this.distTags = distTags;
@@ -41,18 +44,25 @@ public class DistTagService {
         if (version == null || version.isBlank()) {
             throw new ValidationException("VERSION_REQUIRED", "version 不能为空");
         }
-        Plugin plugin = plugins.findByPackageName(packageName)
+        Plugin plugin = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                        .eq(Plugin::getPackageName, packageName))
                 .orElseThrow(() -> new PackageNotFoundException(packageName));
-        if (!versions.existsByPluginIdAndVersionAndStatus(plugin.getId(), version, PUBLISHED)) {
+        if (!MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                .eq(PluginVersion::getPluginId, plugin.getId())
+                .eq(PluginVersion::getVersion, version)
+                .eq(PluginVersion::getStatus, PUBLISHED))) {
             throw new VersionNotFoundException(packageName, version);
         }
         Instant ts = Instant.now();
-        distTags.findByPluginIdAndTag(plugin.getId(), tag)
+        MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                        .eq(DistTag::getPluginId, plugin.getId())
+                        .eq(DistTag::getTag, tag))
                 .ifPresentOrElse(
-                        t -> { t.apply(version, subject, ts); distTags.save(t); },
-                        () -> distTags.save(new DistTag(plugin.getId(), tag, version, subject, ts)));
+                        t -> { t.apply(version, subject, ts); distTags.updateById(t); },
+                        () -> distTags.insert(new DistTag(plugin.getId(), tag, version, subject, ts)));
         Map<String, String> current = new LinkedHashMap<>();
-        for (DistTag t : distTags.findByPluginId(plugin.getId())) {
+        for (DistTag t : distTags.selectList(Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, plugin.getId()))) {
             current.put(t.getTag(), t.getVersion());
         }
         return current;
