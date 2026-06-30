@@ -11,13 +11,20 @@ import com.agentpluginhub.common.PackageNotFoundException;
 import com.agentpluginhub.common.VersionNotFoundException;
 import com.agentpluginhub.domain.DistTag;
 import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.domain.PluginVersion;
 import com.agentpluginhub.mapper.DistTagMapper;
 import com.agentpluginhub.mapper.PluginMapper;
 import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.agentpluginhub.publish.ValidationException;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import java.lang.reflect.Field;
 import java.util.List;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DistTagServiceTest {
 
@@ -26,10 +33,33 @@ class DistTagServiceTest {
     private final DistTagMapper distTags = mock(DistTagMapper.class);
     private final DistTagService service = new DistTagService(plugins, versions, distTags);
 
+    @BeforeAll
+    static void initMybatisPlusTableInfo() {
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Plugin.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), PluginVersion.class);
+    }
+
     private Plugin plugin() {
         Plugin p = new Plugin("@demo/foo", "foo", "d", null);
-        // id 在真实场景由 DB 生成;这里让 Mapper mock 不依赖具体 id。
+        setId(p, 42L);
         return p;
+    }
+
+    private static void setId(Plugin plugin, Long id) {
+        try {
+            Field idField = Plugin.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(plugin, id);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("failed to set plugin id", e);
+        }
+    }
+
+    private static void assertWrapperContains(LambdaQueryWrapper<?> wrapper,
+            String expectedSql, Object expectedValue) {
+        assertThat(wrapper.getSqlSegment()).contains(expectedSql);
+        assertThat(wrapper.getParamNameValuePairs()).containsValue(expectedValue);
     }
 
     @Test
@@ -78,5 +108,31 @@ class DistTagServiceTest {
         assertThat(stable.getUpdatedBy()).isEqualTo("admin");        // 审计填充
         verify(distTags).updateById(stable);
         assertThat(result).containsEntry("stable", "1.1.0");
+    }
+
+    @Test
+    void queries_package_and_published_version_with_required_conditions() {
+        Plugin p = plugin();
+        when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
+        when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
+        when(distTags.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(new DistTag(p.getId(), "stable", "1.0.0"));
+        when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
+
+        service.setDistTag("@demo/foo", "stable", "1.1.0", "admin");
+
+        ArgumentCaptor<LambdaQueryWrapper<Plugin>> packageQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(plugins).selectOne(packageQuery.capture());
+        assertWrapperContains(packageQuery.getValue(), "package_name", "@demo/foo");
+
+        ArgumentCaptor<LambdaQueryWrapper<PluginVersion>> versionExistsQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(versions).selectCount(versionExistsQuery.capture());
+        LambdaQueryWrapper<PluginVersion> wrapper = versionExistsQuery.getValue();
+        assertThat(wrapper.getSqlSegment()).contains("plugin_id", "version", "status");
+        assertThat(wrapper.getParamNameValuePairs()).containsValue(p.getId())
+                .containsValue("1.1.0")
+                .containsValue("PUBLISHED");
     }
 }

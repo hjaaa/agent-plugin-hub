@@ -9,7 +9,6 @@ import com.agentpluginhub.mapper.MapperQueries;
 import com.agentpluginhub.mapper.PluginMapper;
 import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +50,6 @@ public class VersionQueryService {
             tags.put(t.getTag(), t.getVersion());
         }
         List<VersionDetail> details = published.stream()
-                .sorted(Comparator.comparing(PluginVersion::getPublishedAt).reversed())
                 .map(pv -> new VersionDetail(pv.getVersion(), pv.getStatus(),
                         pv.getPublishedAt(), pv.getUploadedBy(), pv.getSizeBytes()))
                 .toList();
