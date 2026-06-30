@@ -132,4 +132,35 @@ class ValidatorTest {
         assertThat(r.packageName()).isEqualTo("@demo/x");
         assertThat(r.pluginName()).isEqualTo("x");
     }
+
+    @Test
+    void should_reject_claude_plugins_prefix() throws Exception {
+        byte[] t = tgz(Map.of(
+                "package/package.json", "{\"name\":\"@demo/x\",\"version\":\"1.0.0\"}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"claude-plugins-foo\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("RESERVED_NAME"));
+    }
+
+    @Test
+    void should_reject_claude_code_prefix() throws Exception {
+        byte[] t = tgz(Map.of(
+                "package/package.json", "{\"name\":\"@demo/x\",\"version\":\"1.0.0\"}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"claude-code-foo\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("RESERVED_NAME"));
+    }
+
+    @Test
+    void should_reject_exact_reserved_name() throws Exception {
+        byte[] t = tgz(Map.of(
+                "package/package.json", "{\"name\":\"@demo/x\",\"version\":\"1.0.0\"}",
+                "package/.claude-plugin/plugin.json",
+                "{\"name\":\"claude-code-marketplace\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("RESERVED_NAME"));
+    }
 }
