@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 // 发布期结构/元数据校验:package.json、.claude-plugin/plugin.json、保留名、外部依赖硬拒。
@@ -15,6 +16,12 @@ public class Validator {
     // 保留名(精确)与保留前缀;含仿冒变体的从简:前缀匹配覆盖 anthropic-* / claude-plugins-*
     private static final List<String> RESERVED_EXACT = List.of("claude-code-marketplace");
     private static final List<String> RESERVED_PREFIX = List.of("anthropic-", "claude-plugins-", "claude-code-");
+    // 合法 npm 包名:小写,可含单层 scope(@scope/name),URL-safe 字符;最多一个斜杠(防 /-/ 破坏 registry 路由)
+    private static final Pattern NPM_NAME = Pattern.compile(
+            "^(?:@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$");
+    // semver:major.minor.patch,可带 -prerelease / +build;不含斜杠(否则破坏 artifact key / tarball 路由)
+    private static final Pattern SEMVER = Pattern.compile(
+            "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$");
 
     private final TarballManifestReader reader;
     private final DependencyInspector inspector;
@@ -33,6 +40,15 @@ public class Validator {
         if (packageName == null || version == null) {
             throw new ValidationException("PACKAGE_JSON_INVALID",
                     "package.json 缺少 name 或 version");
+        }
+        // 校验 name/version 合法性:它们后续被逐字用于 registry 路径与 artifact key,非法值会让审批后条目装不上
+        if (packageName.length() > 214 || !NPM_NAME.matcher(packageName).matches()) {
+            throw new ValidationException("PACKAGE_JSON_INVALID",
+                    "package name 非法(须为合法 npm 包名:小写、可含单层 scope、长度≤214):" + packageName);
+        }
+        if (!SEMVER.matcher(version).matches()) {
+            throw new ValidationException("PACKAGE_JSON_INVALID",
+                    "version 非法(须为 semver,如 1.2.3):" + version);
         }
 
         ObjectNode plugin = reader.readClaudePluginJson(tarball)

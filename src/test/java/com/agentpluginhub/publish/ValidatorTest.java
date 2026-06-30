@@ -100,6 +100,27 @@ class ValidatorTest {
     }
 
     @Test
+    void should_reject_invalid_package_name() throws Exception {
+        // 含多斜杠/-/ 的包名会破坏 registry 路由,发布期即拒(codex P2)
+        byte[] t = tgz(Map.of(
+                "package/package.json", "{\"name\":\"@demo/e/-/vil\",\"version\":\"1.0.0\"}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"x\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("PACKAGE_JSON_INVALID"));
+    }
+
+    @Test
+    void should_reject_invalid_version() throws Exception {
+        byte[] t = tgz(Map.of(
+                "package/package.json", "{\"name\":\"@demo/x\",\"version\":\"1.0/0\"}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"x\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("PACKAGE_JSON_INVALID"));
+    }
+
+    @Test
     void should_accept_when_bundled_dependency_present_in_tarball() throws Exception {
         byte[] t = tgz(Map.of(
                 "package/package.json",
