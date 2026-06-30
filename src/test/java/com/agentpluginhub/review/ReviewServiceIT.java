@@ -169,7 +169,7 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     void approve_deletes_pending_blob_and_keeps_canonical() throws Exception {
         byte[] bytes = plugin("@demo/p7g", "1.0.0");
         Long id = publishing.publish(bytes, "alice");
-        String pendingKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";
+        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
         assertThat(store.exists(pendingKey)).isTrue();
 
         review.approve(id, "admin", "ok");
@@ -183,11 +183,31 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     void reject_deletes_pending_blob() throws Exception {
         byte[] bytes = plugin("@demo/p7h", "1.0.0");
         Long id = publishing.publish(bytes, "alice");
-        String pendingKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";
+        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
         assertThat(store.exists(pendingKey)).isTrue();
 
         review.reject(id, "admin", "no");
 
         assertThat(store.exists(pendingKey)).isFalse();
+    }
+
+    // 回归(Codex P2):同字节的两次提交各持有独立 pending blob,驳回其一不得删掉另一条仍可审批的 blob。
+    // 旧的内容寻址 pending key 下两条 submission 共享同一 blob,reject(a) 会让 approve(b) 的 store.load 失败。
+    @Test
+    void reject_one_of_two_identical_pending_submissions_keeps_other_approvable() throws Exception {
+        byte[] bytes = plugin("@demo/p7dup", "1.0.0");
+        Long a = publishing.publish(bytes, "alice");
+        Long b = publishing.publish(bytes, "bob");   // 同字节的第二次提交(a、b 均 SUBMITTED)
+
+        String keyA = submissions.findById(a).orElseThrow().getTarballRef();
+        String keyB = submissions.findById(b).orElseThrow().getTarballRef();
+        assertThat(keyA).isNotEqualTo(keyB);         // 每提交唯一,不再共享 blob
+
+        review.reject(a, "admin", "dup");            // 驳回 a:afterCommit 仅删 a 自己的 pending blob
+        assertThat(store.exists(keyB)).isTrue();     // b 的 blob 不受影响
+
+        review.approve(b, "admin", "ok");            // b 仍可正常审批上架
+        Plugin p = plugins.findByPackageName("@demo/p7dup").orElseThrow();
+        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
     }
 }

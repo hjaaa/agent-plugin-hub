@@ -9,6 +9,7 @@ import com.agentpluginhub.domain.SubmissionRepository;
 import com.agentpluginhub.domain.SubmissionState;
 import com.agentpluginhub.storage.ArtifactStore;
 import java.time.Instant;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,9 +47,12 @@ public class PublishingService {
                     "版本已发布,不可覆盖:" + vr.packageName() + "@" + vr.version());
         }
 
-        // pending blob 以内容 sha1 命名,扁平无斜杠,本地/对象存储均可
+        // pending blob 用每提交唯一的 key(非内容寻址),扁平无斜杠,本地/对象存储均可。
+        // 内容寻址会让同字节的两次提交共享一个 pending blob;一旦其一被驳回,afterCommit 删除会
+        // 连带删掉另一条仍可审批的 submission 引用的 blob,导致后续 approve 的 store.load 失败。
+        // 每提交独立 key 杜绝该别名,删自身 pending 永远安全。shasum 仍单独留存用于 integrity/canonical key。
         String shasum = IntegrityUtil.hexSha1(tarball);
-        String pendingKey = "pending-" + shasum + ".tgz";
+        String pendingKey = "pending-" + UUID.randomUUID() + ".tgz";
         store.save(pendingKey, tarball);
 
         Instant now = Instant.now();
