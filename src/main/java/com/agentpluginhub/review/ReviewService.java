@@ -41,6 +41,7 @@ public class ReviewService {
         this.store = store;
     }
 
+    @Transactional(readOnly = true)
     public List<Submission> listSubmissions(SubmissionState state) {
         return state == null ? submissions.findAll() : submissions.findByState(state);
     }
