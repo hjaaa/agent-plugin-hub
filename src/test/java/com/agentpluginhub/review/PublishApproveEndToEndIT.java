@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -67,9 +68,13 @@ class PublishApproveEndToEndIT extends AbstractIntegrationTest {
         assertThat(pk.statusCode()).isEqualTo(200);
         assertThat(pk.body()).contains("\"latest\":\"1.0.0\"");
 
+        // 从 packument 动态取 dist.tarball URL(canonical key 含内容 shasum,不再硬编码文件名)
+        String tarballUrl = new ObjectMapper().readTree(pk.body())
+                .path("versions").path("1.0.0").path("dist").path("tarball").asText();
+        assertThat(tarballUrl).contains("/registry/@demo/e2e/-/demo-e2e-1.0.0-");
+
         HttpResponse<byte[]> tb = http.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                        + "/registry/@demo/e2e/-/demo-e2e-1.0.0.tgz")).GET().build(),
+                HttpRequest.newBuilder(URI.create(tarballUrl)).GET().build(),
                 HttpResponse.BodyHandlers.ofByteArray());
         assertThat(tb.statusCode()).isEqualTo(200);
         assertThat(tb.body()).isNotEmpty();

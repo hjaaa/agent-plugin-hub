@@ -71,11 +71,12 @@ public class ReviewService {
                     "版本已发布,不可覆盖:" + s.getPackageName() + "@" + s.getVersion());
         }
 
-        // 把 pending blob 复制到 canonical key
-        String canonicalKey = ArtifactKeys.canonical(s.getPackageName(), s.getVersion());
-        byte[] bytes = store.load(s.getTarballRef());
-        store.save(canonicalKey, bytes);
+        // 内容寻址 canonical key(含 shasum):不同内容 → 不同 key,杜绝跨包/同版本不同内容相互覆盖
+        String canonicalKey = ArtifactKeys.canonical(s.getPackageName(), s.getVersion(), s.getShasum());
 
+        // claim-before-copy:先 saveAndFlush 抢占 uk_version_plugin_ver (plugin_id, version) 唯一约束。
+        // 并发审批的输家在此触发 DataIntegrityViolationException(→409)而回滚,此时尚未写对象,
+        // 因此不会覆盖赢家已落盘的 canonical 字节(防「赢家 DB 行指向输家 tarball」)。
         PluginVersion pv = new PluginVersion();
         pv.setPluginId(plugin.getId());
         pv.setVersion(s.getVersion());
@@ -86,7 +87,11 @@ public class ReviewService {
         pv.setStatus(PUBLISHED);
         pv.setUploadedBy(s.getSubmitter());
         pv.setPublishedAt(Instant.now());
-        versions.save(pv);
+        versions.saveAndFlush(pv);
+
+        // 抢占成功后再把 pending blob 复制到 canonical key(只有赢家执行到这里)
+        byte[] bytes = store.load(s.getTarballRef());
+        store.save(canonicalKey, bytes);
 
         // 设/移 latest 指针
         distTags.findByPluginIdAndTag(plugin.getId(), "latest")
