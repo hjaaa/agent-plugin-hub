@@ -17,6 +17,7 @@ import com.agentpluginhub.storage.ArtifactStore;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -209,5 +210,43 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         review.approve(b, "admin", "ok");            // b 仍可正常审批上架
         Plugin p = plugins.findByPackageName("@demo/p7dup").orElseThrow();
         assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+    }
+
+    // 回归(Codex 二次 P2):升级前遗留的内容寻址 pending key 会让同字节多条提交共享同一 blob
+    // (UUID 改动只覆盖新提交)。afterCommit 删 blob 前须确认无其它非终态提交仍引用,
+    // 否则驳回其一会删掉兄弟提交仍需的 blob,导致其后续 approve 在 store.load 处失败。
+    @Test
+    void reject_legacy_shared_pending_key_keeps_sibling_approvable() throws Exception {
+        byte[] bytes = plugin("@demo/p7legacy", "1.0.0");
+        String legacyKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";   // 模拟旧的内容寻址 key
+        store.save(legacyKey, bytes);
+        Long a = legacySubmission("@demo/p7legacy", "1.0.0", legacyKey, bytes);
+        Long b = legacySubmission("@demo/p7legacy", "1.0.0", legacyKey, bytes);  // 共享同一 legacyKey
+
+        review.reject(a, "admin", "dup");            // 驳回 a:b 仍以非终态引用 legacyKey,不得删
+        assertThat(store.exists(legacyKey)).isTrue();
+
+        review.approve(b, "admin", "ok");            // b 仍可正常审批上架
+        Plugin p = plugins.findByPackageName("@demo/p7legacy").orElseThrow();
+        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+    }
+
+    // 直接构造一条引用指定 pending key 的 SUBMITTED 提交,模拟升级前遗留的共享 blob 场景
+    private Long legacySubmission(String pkg, String version, String key, byte[] bytes) {
+        Submission s = new Submission();
+        s.setPackageName(pkg);
+        s.setVersion(version);
+        s.setPluginName("p7");
+        s.setDescription("d");
+        s.setTarballRef(key);
+        s.setIntegrity(IntegrityUtil.sriSha512(bytes));
+        s.setShasum(IntegrityUtil.hexSha1(bytes));
+        s.setSizeBytes(bytes.length);
+        s.setState(SubmissionState.SUBMITTED);
+        s.setSubmitter("alice");
+        Instant now = Instant.now();
+        s.setCreatedAt(now);
+        s.setUpdatedAt(now);
+        return submissions.save(s).getId();
     }
 }

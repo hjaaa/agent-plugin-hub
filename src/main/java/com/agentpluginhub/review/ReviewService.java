@@ -26,6 +26,8 @@ public class ReviewService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReviewService.class);
     private static final String PUBLISHED = "PUBLISHED";
+    private static final List<SubmissionState> NONTERMINAL =
+            List.of(SubmissionState.SUBMITTED, SubmissionState.UNDER_REVIEW);
 
     private final SubmissionRepository submissions;
     private final PluginRepository plugins;
@@ -147,13 +149,19 @@ public class ReviewService {
         }
     }
 
-    // 事务提交后再删 pending blob:回滚则保留供重试,提交才清理 —— 避免 DB/blob 不一致与孤儿堆积
+    // 事务提交后再删 pending blob:回滚则保留供重试,提交才清理 —— 避免 DB/blob 不一致与孤儿堆积。
+    // 删前再确认无其它非终态 submission 仍引用同一 key:升级前遗留的内容寻址 pending key
+    // (pending-<sha>.tgz)会让同字节的多条提交共享同一 blob,无条件删除会误删兄弟提交仍需的 blob。
+    // 新提交已用每提交唯一的 UUID key 不再共享;此检查兜住遗留共享场景,宁可留孤儿也不误删。
     private void deletePendingAfterCommit(String pendingKey) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
-                    store.delete(pendingKey);
+                    // 当前 submission 已落终态(APPROVED/REJECTED),不计入 NONTERMINAL;仍有非终态引用则保留
+                    if (submissions.countByTarballRefAndStateIn(pendingKey, NONTERMINAL) == 0) {
+                        store.delete(pendingKey);
+                    }
                 } catch (RuntimeException e) {
                     // pending 清理是 best-effort:事务已提交,清理失败不得影响审批结果,仅告警
                     log.warn("failed to delete pending blob after commit: {}", pendingKey, e);
