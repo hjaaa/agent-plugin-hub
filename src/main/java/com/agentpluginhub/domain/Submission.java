@@ -5,77 +5,50 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import java.time.Instant;
 
-@Entity
-@Table(name = "submission")
 @TableName("submission")
 public class Submission {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(name = "package_name", nullable = false)
     @TableField("package_name")
     private String packageName;
 
-    @Column(nullable = false)
     private String version;
 
-    @Column(name = "plugin_name", nullable = false)
     @TableField("plugin_name")
     private String pluginName;
 
     private String description;
 
-    @Column(name = "tarball_ref", nullable = false)
     @TableField("tarball_ref")
     private String tarballRef;
 
-    @Column(nullable = false)
     private String integrity;
 
-    @Column(nullable = false)
     private String shasum;
 
-    @Column(name = "size_bytes", nullable = false)
     @TableField("size_bytes")
     private long sizeBytes;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private SubmissionState state;
 
-    @Column(nullable = false)
     private String submitter;
 
     private String reviewer;
 
-    @Column(name = "review_notes")
     @TableField("review_notes")
     private String reviewNotes;
 
-    @jakarta.persistence.Version
-    @Column(name = "lock_version", nullable = false)
     @Version
     @TableField("lock_version")
     private long lockVersion;
 
-    @Column(name = "created_at", nullable = false)
     @TableField("created_at")
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     @TableField("updated_at")
     private Instant updatedAt;
 

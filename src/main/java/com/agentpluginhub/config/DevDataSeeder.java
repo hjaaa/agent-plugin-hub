@@ -1,8 +1,11 @@
 package com.agentpluginhub.config;
 
-import com.agentpluginhub.domain.PluginRepository;
+import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.review.ReviewService;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.io.InputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,11 +21,11 @@ public class DevDataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DevDataSeeder.class);
 
-    private final PluginRepository plugins;
+    private final PluginMapper plugins;
     private final PublishingService publishing;
     private final ReviewService review;
 
-    public DevDataSeeder(PluginRepository plugins, PublishingService publishing, ReviewService review) {
+    public DevDataSeeder(PluginMapper plugins, PublishingService publishing, ReviewService review) {
         this.plugins = plugins;
         this.publishing = publishing;
         this.review = review;
@@ -31,7 +34,8 @@ public class DevDataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         try {
-            if (plugins.findByPackageName("@demo/hello-plugin").isPresent()) {
+            if (MapperQueries.exists(plugins, Wrappers.<Plugin>lambdaQuery()
+                    .eq(Plugin::getPackageName, "@demo/hello-plugin"))) {
                 return;
             }
             ClassPathResource res = new ClassPathResource("dev/demo-hello-plugin-1.0.0.tgz");

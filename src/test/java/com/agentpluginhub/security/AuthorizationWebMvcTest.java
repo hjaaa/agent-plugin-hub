@@ -7,13 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
 import com.agentpluginhub.domain.SubmissionState;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.review.ReviewService;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -43,7 +42,7 @@ class AuthorizationWebMvcTest extends AbstractIntegrationTest {
     ReviewService review;
 
     @MockitoBean
-    SubmissionRepository submissions;
+    SubmissionMapper submissions;
 
     @BeforeEach
     void setup() {
@@ -52,7 +51,7 @@ class AuthorizationWebMvcTest extends AbstractIntegrationTest {
         stub.setPackageName("test-pkg");
         stub.setVersion("1.0.0");
         stub.setState(SubmissionState.SUBMITTED);
-        Mockito.when(submissions.findById(any())).thenReturn(Optional.of(stub));
+        Mockito.when(submissions.selectById(any())).thenReturn(stub);
     }
 
     @Test
