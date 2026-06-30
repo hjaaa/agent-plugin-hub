@@ -29,12 +29,12 @@ public class MarketplaceService {
         List<PluginRef> refs = new ArrayList<>();
         for (PluginEntry e : catalog.all()) {
             try {
-                String latest = e.distTags() == null ? null : e.distTags().get("latest");
-                if (latest == null || e.packageName() == null || e.pluginName() == null) {
-                    log.warn("skip plugin with incomplete metadata: {}", e.packageName());
+                String stable = e.distTags() == null ? null : e.distTags().get("stable");
+                if (stable == null || e.packageName() == null || e.pluginName() == null) {
+                    log.warn("skip plugin without stable channel or incomplete metadata: {}", e.packageName());
                     continue;
                 }
-                NpmSource src = new NpmSource("npm", e.packageName(), latest, baseUrl + "/registry");
+                NpmSource src = new NpmSource("npm", e.packageName(), stable, baseUrl + "/registry");
                 refs.add(new PluginRef(e.pluginName(), e.description(), src));
             } catch (RuntimeException ex) {
                 log.warn("skip bad plugin {}", e.packageName(), ex);

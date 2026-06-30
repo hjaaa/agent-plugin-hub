@@ -49,5 +49,9 @@ public class TestDataSeeder {
         distTags.findByPluginIdAndTag(plugin.getId(), "latest")
                 .ifPresentOrElse(t -> { t.setVersion(version); distTags.save(t); },
                         () -> distTags.save(new DistTag(plugin.getId(), "latest", version)));
+        // M2:种子插件也设 stable(镜像"首发即设 stable"),使其出现在 marketplace.json
+        if (distTags.findByPluginIdAndTag(plugin.getId(), "stable").isEmpty()) {
+            distTags.save(new DistTag(plugin.getId(), "stable", version));
+        }
     }
 }
