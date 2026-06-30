@@ -1,5 +1,9 @@
 package com.agentpluginhub.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -10,19 +14,23 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "plugin_version")
+@TableName("plugin_version")
 public class PluginVersion {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     @Column(name = "plugin_id", nullable = false)
+    @TableField("plugin_id")
     private Long pluginId;
 
     @Column(nullable = false)
     private String version;
 
     @Column(name = "tarball_ref", nullable = false)
+    @TableField("tarball_ref")
     private String tarballRef;
 
     @Column(nullable = false)
@@ -32,15 +40,18 @@ public class PluginVersion {
     private String shasum;
 
     @Column(name = "size_bytes", nullable = false)
+    @TableField("size_bytes")
     private long sizeBytes;
 
     @Column(nullable = false)
     private String status;
 
     @Column(name = "uploaded_by", nullable = false)
+    @TableField("uploaded_by")
     private String uploadedBy;
 
     @Column(name = "published_at", nullable = false)
+    @TableField("published_at")
     private Instant publishedAt;
 
     public Long getId() { return id; }

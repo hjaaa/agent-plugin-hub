@@ -1,5 +1,9 @@
 package com.agentpluginhub.domain;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -10,13 +14,16 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "dist_tag")
+@TableName("dist_tag")
 public class DistTag {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     @Column(name = "plugin_id", nullable = false)
+    @TableField("plugin_id")
     private Long pluginId;
 
     @Column(nullable = false)
@@ -27,9 +34,11 @@ public class DistTag {
 
     // 移动指针的 admin subject 与移动时刻;M1 既有 latest 行为 NULL(不回填)
     @Column(name = "updated_by")
+    @TableField("updated_by")
     private String updatedBy;
 
     @Column(name = "updated_at")
+    @TableField("updated_at")
     private Instant updatedAt;
 
     protected DistTag() {
