@@ -1,7 +1,9 @@
 package com.agentpluginhub.security;
 
 import com.agentpluginhub.domain.RegistryToken;
-import com.agentpluginhub.domain.RegistryTokenRepository;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.RegistryTokenMapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -14,10 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RegistryTokenService {
 
-    private final RegistryTokenRepository repo;
+    private final RegistryTokenMapper repo;
     private final SecureRandom random = new SecureRandom();
 
-    public RegistryTokenService(RegistryTokenRepository repo) {
+    public RegistryTokenService(RegistryTokenMapper repo) {
         this.repo = repo;
     }
 
@@ -26,7 +28,7 @@ public class RegistryTokenService {
         byte[] raw = new byte[32];
         random.nextBytes(raw);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        repo.save(new RegistryToken(sha256(token), label, createdBy, Instant.now()));
+        repo.insert(new RegistryToken(sha256(token), label, createdBy, Instant.now()));
         return token;
     }
 
@@ -34,22 +36,27 @@ public class RegistryTokenService {
         if (token == null || token.isBlank()) {
             return null;
         }
-        return repo.findByTokenHashAndRevokedFalse(sha256(token))
+        return MapperQueries.one(repo, Wrappers.<RegistryToken>lambdaQuery()
+                        .eq(RegistryToken::getTokenHash, sha256(token))
+                        .eq(RegistryToken::isRevoked, false))
                 .map(t -> new RegistryPrincipal(t.getLabel()))
                 .orElse(null);
     }
 
     @Transactional
     public void revoke(Long id) {
-        repo.findById(id).ifPresent(t -> {
-            t.setRevoked(true);
-            repo.save(t);
-        });
+        RegistryToken token = repo.selectById(id);
+        if (token != null) {
+            token.setRevoked(true);
+            repo.updateById(token);
+        }
     }
 
     // 测试/管理辅助:按明文 token 反查 id
     public Long findIdByToken(String token) {
-        return repo.findByTokenHashAndRevokedFalse(sha256(token))
+        return MapperQueries.one(repo, Wrappers.<RegistryToken>lambdaQuery()
+                        .eq(RegistryToken::getTokenHash, sha256(token))
+                        .eq(RegistryToken::isRevoked, false))
                 .map(RegistryToken::getId).orElse(null);
     }
 
