@@ -3,7 +3,9 @@ package com.agentpluginhub.registry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -31,6 +33,37 @@ public class TarballManifestReader {
     // 从 npm tarball 提取 package/.claude-plugin/plugin.json;读不到/解析失败返回 empty
     public Optional<ObjectNode> readClaudePluginJson(byte[] tgz) {
         return readEntry(tgz, "package/.claude-plugin/plugin.json");
+    }
+
+    // 列出 tarball 内 package/node_modules/ 下实际存在的顶层包名(含 scoped: @scope/name)。
+    // 用于校验 bundleDependencies 声明的包是否真的打包进了 tarball(本平台不代理上游 npm)。
+    public Set<String> listBundledModuleNames(byte[] tgz) {
+        Set<String> names = new HashSet<>();
+        String prefix = "package/node_modules/";
+        try (GzipCompressorInputStream gzip = new GzipCompressorInputStream(new ByteArrayInputStream(tgz));
+                TarArchiveInputStream tar = new TarArchiveInputStream(gzip)) {
+            TarArchiveEntry entry;
+            while ((entry = tar.getNextEntry()) != null) {
+                String name = entry.getName();
+                if (!name.startsWith(prefix)) {
+                    continue;
+                }
+                String[] parts = name.substring(prefix.length()).split("/");
+                if (parts[0].isEmpty()) {
+                    continue;
+                }
+                if (parts[0].startsWith("@")) {
+                    if (parts.length >= 2 && !parts[1].isEmpty()) {
+                        names.add(parts[0] + "/" + parts[1]);   // scoped 包顶层名
+                    }
+                } else {
+                    names.add(parts[0]);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("failed to list node_modules from tarball: {}", e.getMessage());
+        }
+        return names;
     }
 
     private Optional<ObjectNode> readEntry(byte[] tgz, String entryName) {

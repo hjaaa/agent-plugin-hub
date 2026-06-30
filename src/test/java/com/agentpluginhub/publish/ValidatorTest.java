@@ -85,4 +85,30 @@ class ValidatorTest {
                 .isInstanceOf(ValidationException.class)
                 .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("EXTERNAL_DEPENDENCY"));
     }
+
+    @Test
+    void should_reject_when_bundled_dependency_absent_from_tarball() throws Exception {
+        // 声明 bundleDependencies 却未实际打包 node_modules → 仍判外部依赖(codex P2)
+        byte[] t = tgz(Map.of(
+                "package/package.json",
+                "{\"name\":\"@demo/x\",\"version\":\"1.0.0\",\"dependencies\":{\"left-pad\":\"^1\"},"
+                        + "\"bundleDependencies\":[\"left-pad\"]}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"x\",\"version\":\"1.0.0\"}"));
+        assertThatThrownBy(() -> validator.validate(t))
+                .isInstanceOf(ValidationException.class)
+                .satisfies(ex -> assertThat(((ValidationException) ex).getCode()).isEqualTo("EXTERNAL_DEPENDENCY"));
+    }
+
+    @Test
+    void should_accept_when_bundled_dependency_present_in_tarball() throws Exception {
+        byte[] t = tgz(Map.of(
+                "package/package.json",
+                "{\"name\":\"@demo/x\",\"version\":\"1.0.0\",\"dependencies\":{\"left-pad\":\"^1\"},"
+                        + "\"bundleDependencies\":[\"left-pad\"]}",
+                "package/.claude-plugin/plugin.json", "{\"name\":\"x\",\"version\":\"1.0.0\"}",
+                "package/node_modules/left-pad/package.json", "{\"name\":\"left-pad\",\"version\":\"1.0.0\"}"));
+        ValidationResult r = validator.validate(t);
+        assertThat(r.packageName()).isEqualTo("@demo/x");
+        assertThat(r.pluginName()).isEqualTo("x");
+    }
 }

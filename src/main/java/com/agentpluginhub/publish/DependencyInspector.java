@@ -8,12 +8,13 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 // 判断 package.json 是否含需向 registry 解析的外部依赖(本平台不代理上游 → 这类插件装不上)。
-// 语义与 M0 MarketplaceService 一致:bundleDependencies(数组/布尔)与可选 peer 不算外部。
+// 可选 peer 不算外部;bundleDependencies(数组/布尔)声明的包还须实际存在于 tarball node_modules
+// (presentModules)才算自包含,否则仍判为外部依赖。
 @Component
 public class DependencyInspector {
 
-    public boolean hasExternalDependencies(ObjectNode manifest) {
-        Set<String> bundled = bundledNames(manifest);
+    public boolean hasExternalDependencies(ObjectNode manifest, Set<String> presentModules) {
+        Set<String> bundled = bundledNames(manifest, presentModules);
         if (hasNonBundled(manifest.get("dependencies"), bundled)) {
             return true;
         }
@@ -56,7 +57,9 @@ public class DependencyInspector {
         return names;
     }
 
-    private Set<String> bundledNames(ObjectNode manifest) {
+    // 仅当声明的 bundleDependencies 确实存在于 tarball node_modules(presentModules)中,才视为已打包。
+    // 声明却未实际打包的依赖会落回 hasNonBundled,被判为外部依赖(本平台不代理上游 npm,装不上)。
+    private Set<String> bundledNames(ObjectNode manifest, Set<String> presentModules) {
         JsonNode b = manifest.has("bundleDependencies")
                 ? manifest.get("bundleDependencies")
                 : manifest.get("bundledDependencies");
@@ -67,12 +70,21 @@ public class DependencyInspector {
         if (b.isBoolean() && b.asBoolean()) {
             JsonNode deps = manifest.get("dependencies");
             if (deps != null && deps.isObject()) {
-                deps.fieldNames().forEachRemaining(names::add);
+                deps.fieldNames().forEachRemaining(n -> {
+                    if (presentModules.contains(n)) {
+                        names.add(n);
+                    }
+                });
             }
             return names;
         }
         if (b.isArray()) {
-            b.forEach(n -> names.add(n.asText()));
+            b.forEach(n -> {
+                String nm = n.asText();
+                if (presentModules.contains(nm)) {
+                    names.add(nm);
+                }
+            });
         }
         return names;
     }

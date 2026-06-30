@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 // 发布期结构/元数据校验:package.json、.claude-plugin/plugin.json、保留名、外部依赖硬拒。
@@ -47,7 +48,9 @@ public class Validator {
                     "插件名命中保留名/保留前缀,不可用:" + pluginName);
         }
 
-        if (inspector.hasExternalDependencies(pkg)) {
+        // 收集 tarball 内实际打包的 node_modules 顶层包名,校验 bundleDependencies 是否真打包
+        Set<String> presentModules = reader.listBundledModuleNames(tarball);
+        if (inspector.hasExternalDependencies(pkg, presentModules)) {
             throw new ValidationException("EXTERNAL_DEPENDENCY",
                     "插件声明了未打包的外部依赖;M1 仅支持自包含插件,请将依赖 bundle 进 tarball 或移除");
         }
