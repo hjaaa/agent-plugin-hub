@@ -137,4 +137,31 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         assertThatThrownBy(() -> review.approve(999999L, "admin", "x"))
                 .isInstanceOf(SubmissionNotFoundException.class);
     }
+
+    @Test
+    void first_approve_sets_both_latest_and_stable() throws Exception {
+        Long id = publishing.publish(plugin("@demo/p7i", "1.0.0"), "alice");
+        review.approve(id, "admin-sub", "ok");
+
+        Plugin p = plugins.findByPackageName("@demo/p7i").orElseThrow();
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+                .isEqualTo("1.0.0");
+        var stable = distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow();
+        assertThat(stable.getVersion()).isEqualTo("1.0.0");
+        assertThat(stable.getUpdatedBy()).isEqualTo("admin-sub");   // 审计填充
+    }
+
+    @Test
+    void second_approve_advances_latest_but_keeps_stable() throws Exception {
+        Long id1 = publishing.publish(plugin("@demo/p7j", "1.0.0"), "alice");
+        review.approve(id1, "admin", "ok");
+        Long id2 = publishing.publish(plugin("@demo/p7j", "1.1.0"), "alice");
+        review.approve(id2, "admin", "ok");
+
+        Plugin p = plugins.findByPackageName("@demo/p7j").orElseThrow();
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+                .isEqualTo("1.1.0");
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow().getVersion())
+                .isEqualTo("1.0.0");   // stable 不随审批推进
+    }
 }

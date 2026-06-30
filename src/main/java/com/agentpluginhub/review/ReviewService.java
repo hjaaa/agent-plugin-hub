@@ -99,11 +99,17 @@ public class ReviewService {
         byte[] bytes = store.load(s.getTarballRef());
         store.save(canonicalKey, bytes);
 
-        // 设/移 latest 指针
+        // 设/移 latest 指针(审批自动推进)+ 审计
+        Instant ts = Instant.now();
         distTags.findByPluginIdAndTag(plugin.getId(), "latest")
                 .ifPresentOrElse(
-                        t -> { t.setVersion(s.getVersion()); distTags.save(t); },
-                        () -> distTags.save(new DistTag(plugin.getId(), "latest", s.getVersion())));
+                        t -> { t.apply(s.getVersion(), reviewer, ts); distTags.save(t); },
+                        () -> distTags.save(new DistTag(plugin.getId(), "latest", s.getVersion(), reviewer, ts)));
+
+        // 首发规则:该 plugin 尚无 stable 时,同时把 stable 设为该版本(保证首发即可被装)
+        if (distTags.findByPluginIdAndTag(plugin.getId(), "stable").isEmpty()) {
+            distTags.save(new DistTag(plugin.getId(), "stable", s.getVersion(), reviewer, ts));
+        }
 
         s.setState(SubmissionState.APPROVED);
         s.setReviewer(reviewer);
