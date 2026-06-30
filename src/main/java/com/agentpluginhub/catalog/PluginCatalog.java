@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 // M1:从 DB 构建只读目录视图。仅暴露含 PUBLISHED 版本的插件;dist-tags 取自 dist_tag 表。
@@ -35,9 +36,23 @@ public class PluginCatalog {
     }
 
     public List<PluginEntry> all() {
+        List<Plugin> allPlugins = plugins.findAll();
+        if (allPlugins.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = allPlugins.stream().map(Plugin::getId).toList();
+        // 三次查询替代 1+2N:全量插件 + 批量 versions + 批量 dist-tags,按 pluginId 分组
+        Map<Long, List<PluginVersion>> versionsByPlugin = versions
+                .findByPluginIdInAndStatus(ids, PUBLISHED).stream()
+                .collect(Collectors.groupingBy(PluginVersion::getPluginId));
+        Map<Long, List<DistTag>> tagsByPlugin = distTags.findByPluginIdIn(ids).stream()
+                .collect(Collectors.groupingBy(DistTag::getPluginId));
         List<PluginEntry> result = new ArrayList<>();
-        for (Plugin p : plugins.findAll()) {
-            toEntry(p).ifPresent(result::add);
+        for (Plugin p : allPlugins) {
+            buildEntry(p,
+                    versionsByPlugin.getOrDefault(p.getId(), List.of()),
+                    tagsByPlugin.getOrDefault(p.getId(), List.of()))
+                    .ifPresent(result::add);
         }
         return result;
     }
@@ -50,9 +65,15 @@ public class PluginCatalog {
         return find(packageName).orElseThrow(() -> new PackageNotFoundException(packageName));
     }
 
-    // 把一个 Plugin 聚合成 PluginEntry;无 PUBLISHED 版本则视为不存在(Optional.empty)
+    // 单插件(find/require)走单查;聚合逻辑与 all() 共用 buildEntry
     private Optional<PluginEntry> toEntry(Plugin p) {
-        List<PluginVersion> published = versions.findByPluginIdAndStatus(p.getId(), PUBLISHED);
+        return buildEntry(p,
+                versions.findByPluginIdAndStatus(p.getId(), PUBLISHED),
+                distTags.findByPluginId(p.getId()));
+    }
+
+    // 无 PUBLISHED 版本则视为不存在(Optional.empty);否则渲成 PluginEntry
+    private Optional<PluginEntry> buildEntry(Plugin p, List<PluginVersion> published, List<DistTag> tags) {
         if (published.isEmpty()) {
             return Optional.empty();
         }
@@ -60,11 +81,11 @@ public class PluginCatalog {
         for (PluginVersion pv : published) {
             vs.add(new VersionEntry(pv.getVersion(), pv.getTarballRef()));
         }
-        Map<String, String> tags = new LinkedHashMap<>();
-        for (DistTag t : distTags.findByPluginId(p.getId())) {
-            tags.put(t.getTag(), t.getVersion());
+        Map<String, String> tagMap = new LinkedHashMap<>();
+        for (DistTag t : tags) {
+            tagMap.put(t.getTag(), t.getVersion());
         }
         return Optional.of(new PluginEntry(p.getPackageName(), p.getPluginName(),
-                p.getDescription(), tags, vs));
+                p.getDescription(), tagMap, vs));
     }
 }
