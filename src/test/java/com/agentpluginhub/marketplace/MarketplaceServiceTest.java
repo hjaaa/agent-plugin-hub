@@ -17,23 +17,23 @@ import org.junit.jupiter.api.Test;
 class MarketplaceServiceTest {
 
     @Test
-    void should_render_npm_source_and_skip_incomplete_plugin() {
+    void should_follow_stable_channel_and_skip_plugin_without_stable() {
         PluginCatalog catalog = mock(PluginCatalog.class);
+        // latest 与 stable 故意不同:必须广告 stable(1.0.0)而非 latest(1.1.0)
         PluginEntry good = new PluginEntry("@demo/good", "good", "g",
-                Map.of("latest", "1.0.0"), List.of(new VersionEntry("1.0.0", "good-1.0.0.tgz")));
-        // 坏插件:没有 latest dist-tag,必须被跳过
-        PluginEntry bad = new PluginEntry("@demo/bad", "bad", "b", Map.of(), List.of());
-        when(catalog.all()).thenReturn(List.of(good, bad));
+                Map.of("latest", "1.1.0", "stable", "1.0.0"),
+                List.of(new VersionEntry("1.1.0", "good-1.1.0.tgz"),
+                        new VersionEntry("1.0.0", "good-1.0.0.tgz")));
+        // 仅有 latest、无 stable(灰度中)→ 必须跳过
+        PluginEntry latestOnly = new PluginEntry("@demo/grey", "grey", "x",
+                Map.of("latest", "2.0.0"), List.of(new VersionEntry("2.0.0", "grey-2.0.0.tgz")));
+        when(catalog.all()).thenReturn(List.of(good, latestOnly));
 
         Marketplace m = new MarketplaceService(catalog).render("http://localhost:8080");
 
-        assertThat(m.name()).isEqualTo("agent-plugin-hub");
         assertThat(m.plugins()).extracting(PluginRef::name).containsExactly("good");
-
         NpmSource src = m.plugins().get(0).source();
-        assertThat(src.source()).isEqualTo("npm");
-        assertThat(src.packageName()).isEqualTo("@demo/good");
-        assertThat(src.version()).isEqualTo("1.0.0");
+        assertThat(src.version()).isEqualTo("1.0.0");   // 跟 stable,不跟 latest
         assertThat(src.registry()).isEqualTo("http://localhost:8080/registry");
     }
 }

@@ -11,4 +11,7 @@ public interface ArtifactStore {
 
     // key 是否已存在
     boolean exists(String key);
+
+    // 删除 key 对应对象;不存在视为成功(幂等)。key 必须无路径分隔符。
+    void delete(String key);
 }

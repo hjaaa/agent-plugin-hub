@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -21,14 +22,19 @@ public class S3ArtifactStore implements ArtifactStore {
 
     private final S3Client s3;
     private final String bucket;
+    private final boolean autoCreateBucket;
 
     public S3ArtifactStore(S3Client s3, S3Properties props) {
         this.s3 = s3;
         this.bucket = props.getBucket();
+        this.autoCreateBucket = props.isAutoCreateBucket();
     }
 
     @PostConstruct
     void ensureBucket() {
+        if (!autoCreateBucket) {
+            return;   // 生产:信任配置 bucket 已存在,不调 ListBuckets/CreateBucket
+        }
         boolean exists = s3.listBuckets().buckets().stream()
                 .anyMatch(b -> b.name().equals(bucket));
         if (!exists) {
@@ -66,5 +72,11 @@ public class S3ArtifactStore implements ArtifactStore {
             }
             throw e;
         }
+    }
+
+    @Override
+    public void delete(String key) {
+        // S3 deleteObject 对不存在的 key 也返回成功(幂等)
+        s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     }
 }

@@ -1,5 +1,7 @@
 server:
   port: 8080
+  # 反代/网关后据 X-Forwarded-* 生成正确的 registry/marketplace 绝对 URL
+  forward-headers-strategy: framework
 spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/agentpluginhub?useSSL=false&serverTimezone=UTC&characterEncoding=utf8}
@@ -42,6 +44,7 @@ app:
     secret-key: ${S3_SECRET_KEY:minioadmin}
     bucket: ${S3_BUCKET:agent-plugin-hub}
     region: ${S3_REGION:us-east-1}
+    auto-create-bucket: ${S3_AUTO_CREATE_BUCKET:true}
   security:
     bootstrap-admin-subject: ${BOOTSTRAP_ADMIN_SUBJECT:}
   registry:

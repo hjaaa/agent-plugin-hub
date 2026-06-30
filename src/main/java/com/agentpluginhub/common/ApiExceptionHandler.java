@@ -43,4 +43,11 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, String>> handleSubmissionMissing(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
     }
+
+    // 版本非该 plugin 的 PUBLISHED 版本 → 404 + 可区分的 code
+    @ExceptionHandler(com.agentpluginhub.common.VersionNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleVersionMissing(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "VERSION_NOT_FOUND", "message", ex.getMessage()));
+    }
 }

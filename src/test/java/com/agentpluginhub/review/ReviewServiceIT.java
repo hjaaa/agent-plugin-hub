@@ -17,6 +17,7 @@ import com.agentpluginhub.storage.ArtifactStore;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -136,5 +137,116 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     void missing_submission_throws() {
         assertThatThrownBy(() -> review.approve(999999L, "admin", "x"))
                 .isInstanceOf(SubmissionNotFoundException.class);
+    }
+
+    @Test
+    void first_approve_sets_both_latest_and_stable() throws Exception {
+        Long id = publishing.publish(plugin("@demo/p7i", "1.0.0"), "alice");
+        review.approve(id, "admin-sub", "ok");
+
+        Plugin p = plugins.findByPackageName("@demo/p7i").orElseThrow();
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+                .isEqualTo("1.0.0");
+        var stable = distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow();
+        assertThat(stable.getVersion()).isEqualTo("1.0.0");
+        assertThat(stable.getUpdatedBy()).isEqualTo("admin-sub");   // 审计填充
+    }
+
+    @Test
+    void second_approve_advances_latest_but_keeps_stable() throws Exception {
+        Long id1 = publishing.publish(plugin("@demo/p7j", "1.0.0"), "alice");
+        review.approve(id1, "admin", "ok");
+        Long id2 = publishing.publish(plugin("@demo/p7j", "1.1.0"), "alice");
+        review.approve(id2, "admin", "ok");
+
+        Plugin p = plugins.findByPackageName("@demo/p7j").orElseThrow();
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+                .isEqualTo("1.1.0");
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow().getVersion())
+                .isEqualTo("1.0.0");   // stable 不随审批推进
+    }
+
+    @Test
+    void approve_deletes_pending_blob_and_keeps_canonical() throws Exception {
+        byte[] bytes = plugin("@demo/p7g", "1.0.0");
+        Long id = publishing.publish(bytes, "alice");
+        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
+        assertThat(store.exists(pendingKey)).isTrue();
+
+        review.approve(id, "admin", "ok");
+
+        String canonicalKey = "demo-p7g-1.0.0-" + IntegrityUtil.hexSha1(bytes).substring(0, 12) + ".tgz";
+        assertThat(store.exists(canonicalKey)).isTrue();    // canonical 仍在
+        assertThat(store.exists(pendingKey)).isFalse();     // 提交后 pending 已清理
+    }
+
+    @Test
+    void reject_deletes_pending_blob() throws Exception {
+        byte[] bytes = plugin("@demo/p7h", "1.0.0");
+        Long id = publishing.publish(bytes, "alice");
+        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
+        assertThat(store.exists(pendingKey)).isTrue();
+
+        review.reject(id, "admin", "no");
+
+        assertThat(store.exists(pendingKey)).isFalse();
+    }
+
+    // 回归(Codex P2):同字节的两次提交各持有独立 pending blob,驳回其一不得删掉另一条仍可审批的 blob。
+    // 旧的内容寻址 pending key 下两条 submission 共享同一 blob,reject(a) 会让 approve(b) 的 store.load 失败。
+    @Test
+    void reject_one_of_two_identical_pending_submissions_keeps_other_approvable() throws Exception {
+        byte[] bytes = plugin("@demo/p7dup", "1.0.0");
+        Long a = publishing.publish(bytes, "alice");
+        Long b = publishing.publish(bytes, "bob");   // 同字节的第二次提交(a、b 均 SUBMITTED)
+
+        String keyA = submissions.findById(a).orElseThrow().getTarballRef();
+        String keyB = submissions.findById(b).orElseThrow().getTarballRef();
+        assertThat(keyA).isNotEqualTo(keyB);         // 每提交唯一,不再共享 blob
+
+        review.reject(a, "admin", "dup");            // 驳回 a:afterCommit 仅删 a 自己的 pending blob
+        assertThat(store.exists(keyB)).isTrue();     // b 的 blob 不受影响
+
+        review.approve(b, "admin", "ok");            // b 仍可正常审批上架
+        Plugin p = plugins.findByPackageName("@demo/p7dup").orElseThrow();
+        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+    }
+
+    // 回归(Codex 二次 P2):升级前遗留的内容寻址 pending key 会让同字节多条提交共享同一 blob
+    // (UUID 改动只覆盖新提交)。afterCommit 删 blob 前须确认无其它非终态提交仍引用,
+    // 否则驳回其一会删掉兄弟提交仍需的 blob,导致其后续 approve 在 store.load 处失败。
+    @Test
+    void reject_legacy_shared_pending_key_keeps_sibling_approvable() throws Exception {
+        byte[] bytes = plugin("@demo/p7legacy", "1.0.0");
+        String legacyKey = "pending-" + IntegrityUtil.hexSha1(bytes) + ".tgz";   // 模拟旧的内容寻址 key
+        store.save(legacyKey, bytes);
+        Long a = legacySubmission("@demo/p7legacy", "1.0.0", legacyKey, bytes);
+        Long b = legacySubmission("@demo/p7legacy", "1.0.0", legacyKey, bytes);  // 共享同一 legacyKey
+
+        review.reject(a, "admin", "dup");            // 驳回 a:b 仍以非终态引用 legacyKey,不得删
+        assertThat(store.exists(legacyKey)).isTrue();
+
+        review.approve(b, "admin", "ok");            // b 仍可正常审批上架
+        Plugin p = plugins.findByPackageName("@demo/p7legacy").orElseThrow();
+        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+    }
+
+    // 直接构造一条引用指定 pending key 的 SUBMITTED 提交,模拟升级前遗留的共享 blob 场景
+    private Long legacySubmission(String pkg, String version, String key, byte[] bytes) {
+        Submission s = new Submission();
+        s.setPackageName(pkg);
+        s.setVersion(version);
+        s.setPluginName("p7");
+        s.setDescription("d");
+        s.setTarballRef(key);
+        s.setIntegrity(IntegrityUtil.sriSha512(bytes));
+        s.setShasum(IntegrityUtil.hexSha1(bytes));
+        s.setSizeBytes(bytes.length);
+        s.setState(SubmissionState.SUBMITTED);
+        s.setSubmitter("alice");
+        Instant now = Instant.now();
+        s.setCreatedAt(now);
+        s.setUpdatedAt(now);
+        return submissions.save(s).getId();
     }
 }

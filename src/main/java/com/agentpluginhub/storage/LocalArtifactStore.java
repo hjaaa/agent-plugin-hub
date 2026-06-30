@@ -50,6 +50,18 @@ public class LocalArtifactStore implements ArtifactStore {
         return Files.isRegularFile(Path.of(props.getArtifactsDir(), key));
     }
 
+    @Override
+    public void delete(String key) {
+        if (isIllegal(key)) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(props.getArtifactsDir(), key));
+        } catch (IOException e) {
+            throw new IllegalStateException("failed to delete artifact: " + key, e);
+        }
+    }
+
     private Path resolve(String key) {
         if (isIllegal(key)) {
             throw new ArtifactNotFoundException(String.valueOf(key));

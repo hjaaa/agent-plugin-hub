@@ -37,4 +37,19 @@ class PluginCatalogTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> catalog.require("@x/none"))
                 .isInstanceOf(PackageNotFoundException.class);
     }
+
+    @Test
+    void all_returns_each_published_plugin_with_tags() throws Exception {
+        byte[] a = TarballTestSupport.tgzWithPackageJson("{\"name\":\"@demo/n1a\",\"version\":\"1.0.0\"}");
+        byte[] b = TarballTestSupport.tgzWithPackageJson("{\"name\":\"@demo/n1b\",\"version\":\"2.0.0\"}");
+        seeder.publish("@demo/n1a", "n1a", "1.0.0", "demo-n1a-1.0.0.tgz", a);
+        seeder.publish("@demo/n1b", "n1b", "2.0.0", "demo-n1b-2.0.0.tgz", b);
+
+        var byPackage = catalog.all().stream()
+                .collect(java.util.stream.Collectors.toMap(PluginEntry::packageName, e -> e));
+        assertThat(byPackage).containsKeys("@demo/n1a", "@demo/n1b");
+        assertThat(byPackage.get("@demo/n1a").distTags()).containsEntry("latest", "1.0.0");
+        assertThat(byPackage.get("@demo/n1b").versions())
+                .extracting(VersionEntry::version).containsExactly("2.0.0");
+    }
 }

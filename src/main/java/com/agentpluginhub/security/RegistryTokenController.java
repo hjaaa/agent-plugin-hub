@@ -28,7 +28,7 @@ public class RegistryTokenController {
     public ResponseEntity<RegistryTokenResponse> issue(
             @RequestBody Map<String, String> body, @AuthenticationPrincipal OidcUser principal) {
         String label = body.getOrDefault("label", "unnamed");
-        String createdBy = principal != null ? principal.getSubject() : "admin";
+        String createdBy = principal != null ? principal.getSubject() : "system";
         String token = tokens.issue(label, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(new RegistryTokenResponse(token, label));
     }

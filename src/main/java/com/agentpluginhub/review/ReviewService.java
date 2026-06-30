@@ -16,13 +16,18 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 // ③审核工作流:状态机 + 审批副作用(落 PUBLISHED、移 blob、设 latest)。
 // 并发审批靠 Submission 的 @Version 乐观锁(冲突抛 OptimisticLockingFailureException)。
 @Service
 public class ReviewService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReviewService.class);
     private static final String PUBLISHED = "PUBLISHED";
+    private static final List<SubmissionState> NONTERMINAL =
+            List.of(SubmissionState.SUBMITTED, SubmissionState.UNDER_REVIEW);
 
     private final SubmissionRepository submissions;
     private final PluginRepository plugins;
@@ -39,6 +44,7 @@ public class ReviewService {
         this.store = store;
     }
 
+    @Transactional(readOnly = true)
     public List<Submission> listSubmissions(SubmissionState state) {
         return state == null ? submissions.findAll() : submissions.findByState(state);
     }
@@ -98,12 +104,20 @@ public class ReviewService {
         // 抢占成功后再把 pending blob 复制到 canonical key(只有赢家执行到这里)
         byte[] bytes = store.load(s.getTarballRef());
         store.save(canonicalKey, bytes);
+        // pending blob 已复制到 canonical,提交后清理 pending(本提交成功才删)
+        deletePendingAfterCommit(s.getTarballRef());
 
-        // 设/移 latest 指针
+        // 设/移 latest 指针(审批自动推进)+ 审计
+        Instant ts = Instant.now();
         distTags.findByPluginIdAndTag(plugin.getId(), "latest")
                 .ifPresentOrElse(
-                        t -> { t.setVersion(s.getVersion()); distTags.save(t); },
-                        () -> distTags.save(new DistTag(plugin.getId(), "latest", s.getVersion())));
+                        t -> { t.apply(s.getVersion(), reviewer, ts); distTags.save(t); },
+                        () -> distTags.save(new DistTag(plugin.getId(), "latest", s.getVersion(), reviewer, ts)));
+
+        // 首发规则:该 plugin 尚无 stable 时,同时把 stable 设为该版本(保证首发即可被装)
+        if (distTags.findByPluginIdAndTag(plugin.getId(), "stable").isEmpty()) {
+            distTags.save(new DistTag(plugin.getId(), "stable", s.getVersion(), reviewer, ts));
+        }
 
         s.setState(SubmissionState.APPROVED);
         s.setReviewer(reviewer);
@@ -121,6 +135,7 @@ public class ReviewService {
         s.setReviewNotes(notes);
         s.setUpdatedAt(Instant.now());
         submissions.save(s);
+        deletePendingAfterCommit(s.getTarballRef());
     }
 
     private Submission require(Long id) {
@@ -132,5 +147,26 @@ public class ReviewService {
         if (s.getState() != SubmissionState.SUBMITTED && s.getState() != SubmissionState.UNDER_REVIEW) {
             throw new IllegalTransitionException("当前状态不可审批:" + s.getState());
         }
+    }
+
+    // 事务提交后再删 pending blob:回滚则保留供重试,提交才清理 —— 避免 DB/blob 不一致与孤儿堆积。
+    // 删前再确认无其它非终态 submission 仍引用同一 key:升级前遗留的内容寻址 pending key
+    // (pending-<sha>.tgz)会让同字节的多条提交共享同一 blob,无条件删除会误删兄弟提交仍需的 blob。
+    // 新提交已用每提交唯一的 UUID key 不再共享;此检查兜住遗留共享场景,宁可留孤儿也不误删。
+    private void deletePendingAfterCommit(String pendingKey) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    // 当前 submission 已落终态(APPROVED/REJECTED),不计入 NONTERMINAL;仍有非终态引用则保留
+                    if (submissions.countByTarballRefAndStateIn(pendingKey, NONTERMINAL) == 0) {
+                        store.delete(pendingKey);
+                    }
+                } catch (RuntimeException e) {
+                    // pending 清理是 best-effort:事务已提交,清理失败不得影响审批结果,仅告警
+                    log.warn("failed to delete pending blob after commit: {}", pendingKey, e);
+                }
+            }
+        });
     }
 }
