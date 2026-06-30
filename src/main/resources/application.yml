@@ -42,6 +42,7 @@ app:
     secret-key: ${S3_SECRET_KEY:minioadmin}
     bucket: ${S3_BUCKET:agent-plugin-hub}
     region: ${S3_REGION:us-east-1}
+    auto-create-bucket: ${S3_AUTO_CREATE_BUCKET:true}
   security:
     bootstrap-admin-subject: ${BOOTSTRAP_ADMIN_SUBJECT:}
   registry:

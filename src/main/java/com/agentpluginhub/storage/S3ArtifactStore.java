@@ -21,14 +21,19 @@ public class S3ArtifactStore implements ArtifactStore {
 
     private final S3Client s3;
     private final String bucket;
+    private final boolean autoCreateBucket;
 
     public S3ArtifactStore(S3Client s3, S3Properties props) {
         this.s3 = s3;
         this.bucket = props.getBucket();
+        this.autoCreateBucket = props.isAutoCreateBucket();
     }
 
     @PostConstruct
     void ensureBucket() {
+        if (!autoCreateBucket) {
+            return;   // 生产:信任配置 bucket 已存在,不调 ListBuckets/CreateBucket
+        }
         boolean exists = s3.listBuckets().buckets().stream()
                 .anyMatch(b -> b.name().equals(bucket));
         if (!exists) {
