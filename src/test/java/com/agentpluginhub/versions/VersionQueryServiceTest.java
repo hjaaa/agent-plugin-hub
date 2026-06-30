@@ -37,6 +37,7 @@ class VersionQueryServiceTest {
         MybatisConfiguration configuration = new MybatisConfiguration();
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Plugin.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), PluginVersion.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), DistTag.class);
     }
 
     private static PluginVersion pv(String version, Instant publishedAt) {
@@ -111,6 +112,11 @@ class VersionQueryServiceTest {
         assertThat(wrapper.getSqlSegment()).contains("plugin_id", "status", "ORDER BY", "published_at");
         assertThat(wrapper.getParamNameValuePairs()).containsValue(plugin.getId())
                 .containsValue("PUBLISHED");
+
+        ArgumentCaptor<LambdaQueryWrapper<DistTag>> distTagsQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(distTags).selectList(distTagsQuery.capture());
+        assertWrapperContains(distTagsQuery.getValue(), "plugin_id", plugin.getId());
     }
 
     @Test

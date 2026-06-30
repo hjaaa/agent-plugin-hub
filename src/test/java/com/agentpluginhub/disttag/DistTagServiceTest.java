@@ -38,6 +38,7 @@ class DistTagServiceTest {
         MybatisConfiguration configuration = new MybatisConfiguration();
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Plugin.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), PluginVersion.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), DistTag.class);
     }
 
     private Plugin plugin() {
@@ -134,5 +135,13 @@ class DistTagServiceTest {
         assertThat(wrapper.getParamNameValuePairs()).containsValue(p.getId())
                 .containsValue("1.1.0")
                 .containsValue("PUBLISHED");
+
+        ArgumentCaptor<LambdaQueryWrapper<DistTag>> existingTagQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(distTags).selectOne(existingTagQuery.capture());
+        LambdaQueryWrapper<DistTag> existingTagWrapper = existingTagQuery.getValue();
+        assertThat(existingTagWrapper.getSqlSegment()).contains("plugin_id", "tag");
+        assertThat(existingTagWrapper.getParamNameValuePairs()).containsValue(p.getId())
+                .containsValue("stable");
     }
 }
