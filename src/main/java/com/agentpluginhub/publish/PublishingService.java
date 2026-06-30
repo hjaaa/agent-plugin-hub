@@ -2,12 +2,15 @@ package com.agentpluginhub.publish;
 
 import com.agentpluginhub.common.IntegrityUtil;
 import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.domain.PluginVersion;
 import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
 import com.agentpluginhub.domain.SubmissionState;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import com.agentpluginhub.storage.ArtifactStore;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -21,13 +24,13 @@ public class PublishingService {
 
     private final Validator validator;
     private final ArtifactStore store;
-    private final SubmissionRepository submissions;
-    private final PluginRepository plugins;
-    private final PluginVersionRepository versions;
+    private final SubmissionMapper submissions;
+    private final PluginMapper plugins;
+    private final PluginVersionMapper versions;
 
     public PublishingService(Validator validator, ArtifactStore store,
-            SubmissionRepository submissions, PluginRepository plugins,
-            PluginVersionRepository versions) {
+            SubmissionMapper submissions, PluginMapper plugins,
+            PluginVersionMapper versions) {
         this.validator = validator;
         this.store = store;
         this.submissions = submissions;
@@ -40,9 +43,14 @@ public class PublishingService {
         ValidationResult vr = validator.validate(tarball);          // 失败 → ValidationException(422)
 
         // 不可变发布:若该版本已 PUBLISHED,拒绝
-        Plugin existing = plugins.findByPackageName(vr.packageName()).orElse(null);
-        if (existing != null && versions.existsByPluginIdAndVersionAndStatus(
-                existing.getId(), vr.version(), PUBLISHED)) {
+        Plugin existing = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, vr.packageName())).orElse(null);
+        boolean published = existing != null && MapperQueries.exists(versions,
+                Wrappers.<PluginVersion>lambdaQuery()
+                        .eq(PluginVersion::getPluginId, existing.getId())
+                        .eq(PluginVersion::getVersion, vr.version())
+                        .eq(PluginVersion::getStatus, PUBLISHED));
+        if (published) {
             throw new DuplicatePublishException(
                     "版本已发布,不可覆盖:" + vr.packageName() + "@" + vr.version());
         }
@@ -69,6 +77,7 @@ public class PublishingService {
         s.setSubmitter(submitter);
         s.setCreatedAt(now);
         s.setUpdatedAt(now);
-        return submissions.save(s).getId();
+        submissions.insert(s);
+        return s.getId();
     }
 }
