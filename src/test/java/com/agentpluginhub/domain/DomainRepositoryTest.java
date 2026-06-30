@@ -13,6 +13,19 @@ class DomainRepositoryTest extends AbstractIntegrationTest {
 
     @Autowired PluginRepository plugins;
     @Autowired PluginVersionRepository versions;
+    @Autowired DistTagRepository distTags;
+
+    @Test
+    void dist_tag_persists_audit_columns() {
+        Plugin p = plugins.save(new Plugin("@demo/audit", "audit", null, null));
+        Instant ts = Instant.now();
+        DistTag saved = distTags.save(new DistTag(p.getId(), "stable", "1.0.0", "admin-sub", ts));
+
+        DistTag reloaded = distTags.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getVersion()).isEqualTo("1.0.0");
+        assertThat(reloaded.getUpdatedBy()).isEqualTo("admin-sub");
+        assertThat(reloaded.getUpdatedAt()).isNotNull();
+    }
 
     @Test
     void should_persist_and_find_plugin_by_package() {
