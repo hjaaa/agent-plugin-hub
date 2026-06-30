@@ -50,3 +50,10 @@ app:
   registry:
     auth:
       enabled: ${REGISTRY_AUTH_ENABLED:false}
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+  global-config:
+    db-config:
+      id-type: auto
