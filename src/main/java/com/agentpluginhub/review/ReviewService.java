@@ -61,7 +61,13 @@ public class ReviewService {
         Submission s = require(id);
         assertReviewable(s);
 
+        // 已存在则刷新显示名/描述(新版本可能改了元数据,marketplace 应反映 latest);不存在则新建
         Plugin plugin = plugins.findByPackageName(s.getPackageName())
+                .map(existing -> {
+                    existing.setPluginName(s.getPluginName());
+                    existing.setDescription(s.getDescription());
+                    return plugins.save(existing);
+                })
                 .orElseGet(() -> plugins.save(
                         new Plugin(s.getPackageName(), s.getPluginName(), s.getDescription(), null)));
 

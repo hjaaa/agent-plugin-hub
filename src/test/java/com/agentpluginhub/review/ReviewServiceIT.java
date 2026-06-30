@@ -37,16 +37,21 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     @Autowired ArtifactStore store;
 
     static byte[] plugin(String pkg, String version) throws Exception {
-        return plugin(pkg, version, "d");
+        return plugin(pkg, version, "p7", "d");
     }
 
     // desc 用于在保持 (pkg, version) 不变的前提下制造不同字节(不同 shasum),覆盖并发/二次审批
     static byte[] plugin(String pkg, String version, String desc) throws Exception {
+        return plugin(pkg, version, "p7", desc);
+    }
+
+    // pluginName/desc 可定制,覆盖审批新版本刷新 plugin 元数据
+    static byte[] plugin(String pkg, String version, String pluginName, String desc) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         Map<String, String> entries = Map.of(
                 "package/package.json", "{\"name\":\"" + pkg + "\",\"version\":\"" + version + "\"}",
                 "package/.claude-plugin/plugin.json",
-                "{\"name\":\"p7\",\"description\":\"" + desc + "\",\"version\":\"" + version + "\"}");
+                "{\"name\":\"" + pluginName + "\",\"description\":\"" + desc + "\",\"version\":\"" + version + "\"}");
         try (TarArchiveOutputStream tar =
                 new TarArchiveOutputStream(new GzipCompressorOutputStream(bos))) {
             for (Map.Entry<String, String> en : entries.entrySet()) {
@@ -95,6 +100,20 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         assertThatThrownBy(() -> review.approve(idB, "admin", "ok"))
                 .isInstanceOf(DuplicatePublishException.class);
         assertThat(store.load(keyA)).isEqualTo(contentA);   // 仍是 A 的字节,未被 B 覆盖
+    }
+
+    @Test
+    void approving_new_version_refreshes_plugin_metadata() throws Exception {
+        Long id1 = publishing.publish(plugin("@demo/p7f", "1.0.0", "old-name", "old desc"), "alice");
+        review.approve(id1, "admin", "ok");
+        Long id2 = publishing.publish(plugin("@demo/p7f", "2.0.0", "new-name", "new desc"), "alice");
+        review.approve(id2, "admin", "ok");
+
+        Plugin p = plugins.findByPackageName("@demo/p7f").orElseThrow();
+        assertThat(p.getPluginName()).isEqualTo("new-name");
+        assertThat(p.getDescription()).isEqualTo("new desc");
+        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+                .isEqualTo("2.0.0");
     }
 
     @Test

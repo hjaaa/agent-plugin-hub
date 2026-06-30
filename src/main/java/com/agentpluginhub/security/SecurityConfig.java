@@ -62,6 +62,10 @@ public class SecurityConfig {
                                 "/healthz")
                         .permitAll()
                         .anyRequest().authenticated())
+                // /api/** 是 API 端点(CLI/脚本调用,非浏览器表单),豁免 CSRF——否则 OIDC 会话登录的
+                // AUTHOR/ADMIN 因拿不到 CSRF token 而对所有状态变更调用 403。授权仍由方法级 @PreAuthorize
+                // (ROLE)把守;session cookie 默认 SameSite=Lax,跨站风险有限。
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService)));
         return http.build();

@@ -1,7 +1,6 @@
 package com.agentpluginhub.security;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,22 +60,18 @@ class AuthorizationWebMvcTest extends AbstractIntegrationTest {
         MockMultipartFile file = new MockMultipartFile("file", "p.tgz", "application/octet-stream",
                 new byte[]{1});
         // 无角色 → 403
-        mvc.perform(multipart("/api/plugins").file(file).with(csrf())
-                .with(oidcLogin()))
+        mvc.perform(multipart("/api/plugins").file(file).with(oidcLogin()))
                 .andExpect(status().isForbidden());
         // 有 AUTHOR → 放行(201 Created)
-        mvc.perform(multipart("/api/plugins").file(file).with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+        mvc.perform(multipart("/api/plugins").file(file).with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
                 .andExpect(status().is2xxSuccessful());
     }
 
     @Test
     void approve_requires_admin_role() throws Exception {
-        mvc.perform(post("/api/submissions/1/approve").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+        mvc.perform(post("/api/submissions/1/approve").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/submissions/1/approve").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        mvc.perform(post("/api/submissions/1/approve").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().is2xxSuccessful());
     }
 
@@ -99,21 +94,17 @@ class AuthorizationWebMvcTest extends AbstractIntegrationTest {
 
     @Test
     void start_review_requires_admin_role() throws Exception {
-        mvc.perform(post("/api/submissions/1/review").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+        mvc.perform(post("/api/submissions/1/review").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/submissions/1/review").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        mvc.perform(post("/api/submissions/1/review").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().is2xxSuccessful());
     }
 
     @Test
     void reject_requires_admin_role() throws Exception {
-        mvc.perform(post("/api/submissions/1/reject").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
+        mvc.perform(post("/api/submissions/1/reject").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_AUTHOR"))))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/submissions/1/reject").with(csrf())
-                .with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+        mvc.perform(post("/api/submissions/1/reject").with(oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().is2xxSuccessful());
     }
 
