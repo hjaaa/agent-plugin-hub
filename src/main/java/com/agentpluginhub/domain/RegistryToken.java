@@ -5,7 +5,13 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @TableName("registry_token")
 public class RegistryToken {
 
@@ -23,10 +29,8 @@ public class RegistryToken {
     @TableField("created_at")
     private Instant createdAt;
 
+    @Setter
     private boolean revoked;
-
-    protected RegistryToken() {
-    }
 
     public RegistryToken(String tokenHash, String label, String createdBy, Instant createdAt) {
         this.tokenHash = tokenHash;
@@ -35,12 +39,4 @@ public class RegistryToken {
         this.createdAt = createdAt;
         this.revoked = false;
     }
-
-    public Long getId() { return id; }
-    public String getTokenHash() { return tokenHash; }
-    public String getLabel() { return label; }
-    public String getCreatedBy() { return createdBy; }
-    public Instant getCreatedAt() { return createdAt; }
-    public boolean isRevoked() { return revoked; }
-    public void setRevoked(boolean v) { this.revoked = v; }
 }

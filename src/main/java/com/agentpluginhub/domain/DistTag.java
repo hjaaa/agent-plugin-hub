@@ -5,7 +5,13 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @TableName("dist_tag")
 public class DistTag {
 
@@ -17,6 +23,7 @@ public class DistTag {
 
     private String tag;
 
+    @Setter
     private String version;
 
     // 移动指针的 admin subject 与移动时刻;M1 既有 latest 行为 NULL(不回填)
@@ -25,9 +32,6 @@ public class DistTag {
 
     @TableField("updated_at")
     private Instant updatedAt;
-
-    protected DistTag() {
-    }
 
     public DistTag(Long pluginId, String tag, String version) {
         this.pluginId = pluginId;
@@ -49,12 +53,4 @@ public class DistTag {
         this.updatedBy = updatedBy;
         this.updatedAt = updatedAt;
     }
-
-    public Long getId() { return id; }
-    public Long getPluginId() { return pluginId; }
-    public String getTag() { return tag; }
-    public String getVersion() { return version; }
-    public void setVersion(String v) { this.version = v; }
-    public String getUpdatedBy() { return updatedBy; }
-    public Instant getUpdatedAt() { return updatedAt; }
 }

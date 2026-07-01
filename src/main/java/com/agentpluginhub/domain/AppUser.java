@@ -5,7 +5,13 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @TableName("app_user")
 public class AppUser {
 
@@ -14,23 +20,15 @@ public class AppUser {
 
     private String subject;
 
+    @Setter
     private String email;
 
     @TableField("created_at")
     private Instant createdAt;
-
-    protected AppUser() {
-    }
 
     public AppUser(String subject, String email, Instant createdAt) {
         this.subject = subject;
         this.email = email;
         this.createdAt = createdAt;
     }
-
-    public Long getId() { return id; }
-    public String getSubject() { return subject; }
-    public String getEmail() { return email; }
-    public void setEmail(String v) { this.email = v; }
-    public Instant getCreatedAt() { return createdAt; }
 }
