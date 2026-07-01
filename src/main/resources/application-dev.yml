@@ -1,9 +1,5 @@
 # dev profile 覆盖:
 # 1. 修正 MySQL 8.0 caching_sha2_password 认证所需的 JDBC 参数
-# 2. DDL 自动建表(dev 快速启动,无需手动维护 schema)
 spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/agentpluginhub?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true}
-  jpa:
-    hibernate:
-      ddl-auto: validate

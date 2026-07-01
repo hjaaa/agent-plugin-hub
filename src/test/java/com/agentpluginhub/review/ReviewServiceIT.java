@@ -3,18 +3,22 @@ package com.agentpluginhub.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.agentpluginhub.domain.DistTagRepository;
-import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
-import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
-import com.agentpluginhub.domain.SubmissionState;
 import com.agentpluginhub.common.IntegrityUtil;
+import com.agentpluginhub.domain.DistTag;
+import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.domain.Submission;
+import com.agentpluginhub.domain.SubmissionState;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import com.agentpluginhub.publish.DuplicatePublishException;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.storage.ArtifactStore;
 import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -31,10 +35,10 @@ class ReviewServiceIT extends AbstractIntegrationTest {
 
     @Autowired PublishingService publishing;
     @Autowired ReviewService review;
-    @Autowired SubmissionRepository submissions;
-    @Autowired PluginRepository plugins;
-    @Autowired PluginVersionRepository versions;
-    @Autowired DistTagRepository distTags;
+    @Autowired SubmissionMapper submissions;
+    @Autowired PluginMapper plugins;
+    @Autowired PluginVersionMapper versions;
+    @Autowired DistTagMapper distTags;
     @Autowired ArtifactStore store;
 
     static byte[] plugin(String pkg, String version) throws Exception {
@@ -67,18 +71,45 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         return bos.toByteArray();
     }
 
+    static byte[] pluginWithoutDescription(String pkg, String version, String pluginName) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        Map<String, String> entries = Map.of(
+                "package/package.json", "{\"name\":\"" + pkg + "\",\"version\":\"" + version + "\"}",
+                "package/.claude-plugin/plugin.json",
+                "{\"name\":\"" + pluginName + "\",\"version\":\"" + version + "\"}");
+        try (TarArchiveOutputStream tar =
+                new TarArchiveOutputStream(new GzipCompressorOutputStream(bos))) {
+            for (Map.Entry<String, String> en : entries.entrySet()) {
+                byte[] c = en.getValue().getBytes(StandardCharsets.UTF_8);
+                TarArchiveEntry e = new TarArchiveEntry(en.getKey());
+                e.setSize(c.length);
+                tar.putArchiveEntry(e);
+                tar.write(c);
+                tar.closeArchiveEntry();
+            }
+        }
+        return bos.toByteArray();
+    }
+
     @Test
     void approve_should_publish_version_and_set_latest_and_store_canonical_blob() throws Exception {
         byte[] bytes = plugin("@demo/p7a", "1.0.0");
         Long id = publishing.publish(bytes, "alice");
         review.approve(id, "admin", "ok");
 
-        Submission s = submissions.findById(id).orElseThrow();
+        Submission s = submissions.selectById(id);
+        assertThat(s).isNotNull();
         assertThat(s.getState()).isEqualTo(SubmissionState.APPROVED);
 
-        Plugin p = plugins.findByPackageName("@demo/p7a").orElseThrow();
-        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
-        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7a")).orElseThrow();
+        assertThat(MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                .eq(PluginVersion::getPluginId, p.getId())
+                .eq(PluginVersion::getVersion, "1.0.0")
+                .eq(PluginVersion::getStatus, "PUBLISHED"))).isTrue();
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "latest")).orElseThrow().getVersion())
                 .isEqualTo("1.0.0");
         // canonical key 含内容 shasum 短前缀(内容寻址)
         String canonicalKey = "demo-p7a-1.0.0-" + IntegrityUtil.hexSha1(bytes).substring(0, 12) + ".tgz";
@@ -110,19 +141,38 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         Long id2 = publishing.publish(plugin("@demo/p7f", "2.0.0", "new-name", "new desc"), "alice");
         review.approve(id2, "admin", "ok");
 
-        Plugin p = plugins.findByPackageName("@demo/p7f").orElseThrow();
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7f")).orElseThrow();
         assertThat(p.getPluginName()).isEqualTo("new-name");
         assertThat(p.getDescription()).isEqualTo("new desc");
-        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "latest")).orElseThrow().getVersion())
                 .isEqualTo("2.0.0");
+    }
+
+    @Test
+    void approving_new_version_without_description_clears_plugin_description() throws Exception {
+        Long id1 = publishing.publish(plugin("@demo/p7nodesc", "1.0.0", "old-name", "old desc"), "alice");
+        review.approve(id1, "admin", "ok");
+        Long id2 = publishing.publish(pluginWithoutDescription("@demo/p7nodesc", "2.0.0", "new-name"), "alice");
+        review.approve(id2, "admin", "ok");
+
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7nodesc")).orElseThrow();
+        assertThat(p.getPluginName()).isEqualTo("new-name");
+        assertThat(p.getDescription()).isNull();
     }
 
     @Test
     void reject_should_not_publish() throws Exception {
         Long id = publishing.publish(plugin("@demo/p7b", "1.0.0"), "alice");
         review.reject(id, "admin", "no");
-        assertThat(submissions.findById(id).orElseThrow().getState()).isEqualTo(SubmissionState.REJECTED);
-        assertThat(plugins.findByPackageName("@demo/p7b")).isEmpty();
+        Submission s = submissions.selectById(id);
+        assertThat(s).isNotNull();
+        assertThat(s.getState()).isEqualTo(SubmissionState.REJECTED);
+        assertThat(MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7b"))).isEmpty();
     }
 
     @Test
@@ -144,10 +194,15 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         Long id = publishing.publish(plugin("@demo/p7i", "1.0.0"), "alice");
         review.approve(id, "admin-sub", "ok");
 
-        Plugin p = plugins.findByPackageName("@demo/p7i").orElseThrow();
-        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7i")).orElseThrow();
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "latest")).orElseThrow().getVersion())
                 .isEqualTo("1.0.0");
-        var stable = distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow();
+        var stable = MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "stable")).orElseThrow();
         assertThat(stable.getVersion()).isEqualTo("1.0.0");
         assertThat(stable.getUpdatedBy()).isEqualTo("admin-sub");   // 审计填充
     }
@@ -159,10 +214,15 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         Long id2 = publishing.publish(plugin("@demo/p7j", "1.1.0"), "alice");
         review.approve(id2, "admin", "ok");
 
-        Plugin p = plugins.findByPackageName("@demo/p7j").orElseThrow();
-        assertThat(distTags.findByPluginIdAndTag(p.getId(), "latest").orElseThrow().getVersion())
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7j")).orElseThrow();
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "latest")).orElseThrow().getVersion())
                 .isEqualTo("1.1.0");
-        assertThat(distTags.findByPluginIdAndTag(p.getId(), "stable").orElseThrow().getVersion())
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, p.getId())
+                .eq(DistTag::getTag, "stable")).orElseThrow().getVersion())
                 .isEqualTo("1.0.0");   // stable 不随审批推进
     }
 
@@ -170,7 +230,9 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     void approve_deletes_pending_blob_and_keeps_canonical() throws Exception {
         byte[] bytes = plugin("@demo/p7g", "1.0.0");
         Long id = publishing.publish(bytes, "alice");
-        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
+        Submission s = submissions.selectById(id);
+        assertThat(s).isNotNull();
+        String pendingKey = s.getTarballRef();
         assertThat(store.exists(pendingKey)).isTrue();
 
         review.approve(id, "admin", "ok");
@@ -184,7 +246,9 @@ class ReviewServiceIT extends AbstractIntegrationTest {
     void reject_deletes_pending_blob() throws Exception {
         byte[] bytes = plugin("@demo/p7h", "1.0.0");
         Long id = publishing.publish(bytes, "alice");
-        String pendingKey = submissions.findById(id).orElseThrow().getTarballRef();
+        Submission s = submissions.selectById(id);
+        assertThat(s).isNotNull();
+        String pendingKey = s.getTarballRef();
         assertThat(store.exists(pendingKey)).isTrue();
 
         review.reject(id, "admin", "no");
@@ -200,16 +264,24 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         Long a = publishing.publish(bytes, "alice");
         Long b = publishing.publish(bytes, "bob");   // 同字节的第二次提交(a、b 均 SUBMITTED)
 
-        String keyA = submissions.findById(a).orElseThrow().getTarballRef();
-        String keyB = submissions.findById(b).orElseThrow().getTarballRef();
+        Submission submissionA = submissions.selectById(a);
+        assertThat(submissionA).isNotNull();
+        Submission submissionB = submissions.selectById(b);
+        assertThat(submissionB).isNotNull();
+        String keyA = submissionA.getTarballRef();
+        String keyB = submissionB.getTarballRef();
         assertThat(keyA).isNotEqualTo(keyB);         // 每提交唯一,不再共享 blob
 
         review.reject(a, "admin", "dup");            // 驳回 a:afterCommit 仅删 a 自己的 pending blob
         assertThat(store.exists(keyB)).isTrue();     // b 的 blob 不受影响
 
         review.approve(b, "admin", "ok");            // b 仍可正常审批上架
-        Plugin p = plugins.findByPackageName("@demo/p7dup").orElseThrow();
-        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7dup")).orElseThrow();
+        assertThat(MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                .eq(PluginVersion::getPluginId, p.getId())
+                .eq(PluginVersion::getVersion, "1.0.0")
+                .eq(PluginVersion::getStatus, "PUBLISHED"))).isTrue();
     }
 
     // 回归(Codex 二次 P2):升级前遗留的内容寻址 pending key 会让同字节多条提交共享同一 blob
@@ -227,8 +299,12 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         assertThat(store.exists(legacyKey)).isTrue();
 
         review.approve(b, "admin", "ok");            // b 仍可正常审批上架
-        Plugin p = plugins.findByPackageName("@demo/p7legacy").orElseThrow();
-        assertThat(versions.existsByPluginIdAndVersionAndStatus(p.getId(), "1.0.0", "PUBLISHED")).isTrue();
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7legacy")).orElseThrow();
+        assertThat(MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                .eq(PluginVersion::getPluginId, p.getId())
+                .eq(PluginVersion::getVersion, "1.0.0")
+                .eq(PluginVersion::getStatus, "PUBLISHED"))).isTrue();
     }
 
     // 直接构造一条引用指定 pending key 的 SUBMITTED 提交,模拟升级前遗留的共享 blob 场景
@@ -247,6 +323,7 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         Instant now = Instant.now();
         s.setCreatedAt(now);
         s.setUpdatedAt(now);
-        return submissions.save(s).getId();
+        submissions.insert(s);
+        return s.getId();
     }
 }

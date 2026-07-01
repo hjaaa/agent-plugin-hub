@@ -3,30 +3,34 @@ package com.agentpluginhub.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
-import com.agentpluginhub.domain.SubmissionState;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 
-class DomainRepositoryTest extends AbstractIntegrationTest {
+class DomainMapperTest extends AbstractIntegrationTest {
 
-    @Autowired PluginRepository plugins;
-    @Autowired PluginVersionRepository versions;
-    @Autowired DistTagRepository distTags;
-    @Autowired SubmissionRepository submissions;
+    @Autowired PluginMapper plugins;
+    @Autowired PluginVersionMapper versions;
+    @Autowired DistTagMapper distTags;
+    @Autowired SubmissionMapper submissions;
 
     @Test
     void dist_tag_persists_audit_columns() {
-        Plugin p = plugins.save(new Plugin("@demo/audit", "audit", null, null));
+        Plugin p = new Plugin("@demo/audit", "audit", null, null);
+        plugins.insert(p);
         Instant ts = Instant.now();
-        DistTag saved = distTags.save(new DistTag(p.getId(), "stable", "1.0.0", "admin-sub", ts));
+        DistTag saved = new DistTag(p.getId(), "stable", "1.0.0", "admin-sub", ts);
+        distTags.insert(saved);
 
-        DistTag reloaded = distTags.findById(saved.getId()).orElseThrow();
+        DistTag reloaded = distTags.selectById(saved.getId());
         assertThat(reloaded.getVersion()).isEqualTo("1.0.0");
         assertThat(reloaded.getUpdatedBy()).isEqualTo("admin-sub");
         assertThat(reloaded.getUpdatedAt()).isNotNull();
@@ -35,22 +39,24 @@ class DomainRepositoryTest extends AbstractIntegrationTest {
     @Test
     void should_persist_and_find_plugin_by_package() {
         Plugin p = new Plugin("@demo/x", "x", "desc", "team-a");
-        plugins.save(p);
-        assertThat(plugins.findByPackageName("@demo/x")).isPresent();
+        plugins.insert(p);
+        assertThat(plugins.selectOne(Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/x"))).isNotNull();
     }
 
     @Test
     void should_reject_duplicate_package_name() {
-        plugins.save(new Plugin("@demo/dup", "dup", null, null));
-        assertThatThrownBy(() -> plugins.saveAndFlush(new Plugin("@demo/dup", "dup2", null, null)))
+        plugins.insert(new Plugin("@demo/dup", "dup", null, null));
+        assertThatThrownBy(() -> plugins.insert(new Plugin("@demo/dup", "dup2", null, null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void should_reject_duplicate_plugin_version() {
-        Plugin p = plugins.save(new Plugin("@demo/v", "v", null, null));
-        versions.save(newVersion(p.getId(), "1.0.0"));
-        assertThatThrownBy(() -> versions.saveAndFlush(newVersion(p.getId(), "1.0.0")))
+        Plugin p = new Plugin("@demo/v", "v", null, null);
+        plugins.insert(p);
+        versions.insert(newVersion(p.getId(), "1.0.0"));
+        assertThatThrownBy(() -> versions.insert(newVersion(p.getId(), "1.0.0")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -87,17 +93,27 @@ class DomainRepositoryTest extends AbstractIntegrationTest {
 
     @Test
     void stale_submission_update_triggers_optimistic_lock() {
-        Long id = submissions.save(newSubmission("@demo/lock", "1.0.0")).getId();
+        Submission submission = newSubmission("@demo/lock", "1.0.0");
+        submissions.insert(submission);
+        Long id = submission.getId();
+
+        Submission saved = submissions.selectById(id);
+        assertThat(saved.getState()).isEqualTo(SubmissionState.SUBMITTED);
 
         // 两份独立加载(各自独立事务 → 均 lock_version=0,互不共享一级缓存)
-        Submission stale = submissions.findById(id).orElseThrow();
-        Submission fresh = submissions.findById(id).orElseThrow();
+        Submission stale = submissions.selectById(id);
+        Submission fresh = submissions.selectById(id);
 
         fresh.setReviewer("admin");
-        submissions.saveAndFlush(fresh);   // DB lock_version 0→1
+        submissions.updateById(fresh);     // DB lock_version 0→1
 
         stale.setReviewer("other");        // stale 仍持 lock_version=0
-        assertThatThrownBy(() -> submissions.saveAndFlush(stale))
+        assertThatThrownBy(() -> {
+            int updated = submissions.updateById(stale);
+            if (updated == 0) {
+                throw new OptimisticLockingFailureException("stale submission update:" + id);
+            }
+        })
                 .isInstanceOf(OptimisticLockingFailureException.class);
     }
 }

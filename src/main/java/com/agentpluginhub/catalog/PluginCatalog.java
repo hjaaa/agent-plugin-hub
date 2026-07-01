@@ -4,11 +4,13 @@ import com.agentpluginhub.catalog.model.PluginEntry;
 import com.agentpluginhub.catalog.model.VersionEntry;
 import com.agentpluginhub.common.PackageNotFoundException;
 import com.agentpluginhub.domain.DistTag;
-import com.agentpluginhub.domain.DistTagRepository;
 import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
 import com.agentpluginhub.domain.PluginVersion;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,28 +26,31 @@ public class PluginCatalog {
 
     private static final String PUBLISHED = "PUBLISHED";
 
-    private final PluginRepository plugins;
-    private final PluginVersionRepository versions;
-    private final DistTagRepository distTags;
+    private final PluginMapper plugins;
+    private final PluginVersionMapper versions;
+    private final DistTagMapper distTags;
 
-    public PluginCatalog(PluginRepository plugins, PluginVersionRepository versions,
-            DistTagRepository distTags) {
+    public PluginCatalog(PluginMapper plugins, PluginVersionMapper versions,
+            DistTagMapper distTags) {
         this.plugins = plugins;
         this.versions = versions;
         this.distTags = distTags;
     }
 
     public List<PluginEntry> all() {
-        List<Plugin> allPlugins = plugins.findAll();
+        List<Plugin> allPlugins = plugins.selectList(Wrappers.lambdaQuery());
         if (allPlugins.isEmpty()) {
             return List.of();
         }
         List<Long> ids = allPlugins.stream().map(Plugin::getId).toList();
         // 三次查询替代 1+2N:全量插件 + 批量 versions + 批量 dist-tags,按 pluginId 分组
         Map<Long, List<PluginVersion>> versionsByPlugin = versions
-                .findByPluginIdInAndStatus(ids, PUBLISHED).stream()
+                .selectList(Wrappers.<PluginVersion>lambdaQuery()
+                        .in(PluginVersion::getPluginId, ids)
+                        .eq(PluginVersion::getStatus, PUBLISHED)).stream()
                 .collect(Collectors.groupingBy(PluginVersion::getPluginId));
-        Map<Long, List<DistTag>> tagsByPlugin = distTags.findByPluginIdIn(ids).stream()
+        Map<Long, List<DistTag>> tagsByPlugin = distTags.selectList(Wrappers.<DistTag>lambdaQuery()
+                        .in(DistTag::getPluginId, ids)).stream()
                 .collect(Collectors.groupingBy(DistTag::getPluginId));
         List<PluginEntry> result = new ArrayList<>();
         for (Plugin p : allPlugins) {
@@ -58,7 +63,8 @@ public class PluginCatalog {
     }
 
     public Optional<PluginEntry> find(String packageName) {
-        return plugins.findByPackageName(packageName).flatMap(this::toEntry);
+        return MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, packageName)).flatMap(this::toEntry);
     }
 
     public PluginEntry require(String packageName) {
@@ -68,8 +74,11 @@ public class PluginCatalog {
     // 单插件(find/require)走单查;聚合逻辑与 all() 共用 buildEntry
     private Optional<PluginEntry> toEntry(Plugin p) {
         return buildEntry(p,
-                versions.findByPluginIdAndStatus(p.getId(), PUBLISHED),
-                distTags.findByPluginId(p.getId()));
+                versions.selectList(Wrappers.<PluginVersion>lambdaQuery()
+                        .eq(PluginVersion::getPluginId, p.getId())
+                        .eq(PluginVersion::getStatus, PUBLISHED)),
+                distTags.selectList(Wrappers.<DistTag>lambdaQuery()
+                        .eq(DistTag::getPluginId, p.getId())));
     }
 
     // 无 PUBLISHED 版本则视为不存在(Optional.empty);否则渲成 PluginEntry

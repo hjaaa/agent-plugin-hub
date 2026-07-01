@@ -1,38 +1,36 @@
 package com.agentpluginhub.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Entity
-@Table(name = "registry_token")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@TableName("registry_token")
 public class RegistryToken {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(name = "token_hash", nullable = false, unique = true)
+    @TableField("token_hash")
     private String tokenHash;
 
-    @Column(nullable = false)
     private String label;
 
-    @Column(name = "created_by", nullable = false)
+    @TableField("created_by")
     private String createdBy;
 
-    @Column(name = "created_at", nullable = false)
+    @TableField("created_at")
     private Instant createdAt;
 
-    @Column(nullable = false)
+    @Setter
     private boolean revoked;
-
-    protected RegistryToken() {
-    }
 
     public RegistryToken(String tokenHash, String label, String createdBy, Instant createdAt) {
         this.tokenHash = tokenHash;
@@ -41,12 +39,4 @@ public class RegistryToken {
         this.createdAt = createdAt;
         this.revoked = false;
     }
-
-    public Long getId() { return id; }
-    public String getTokenHash() { return tokenHash; }
-    public String getLabel() { return label; }
-    public String getCreatedBy() { return createdBy; }
-    public Instant getCreatedAt() { return createdAt; }
-    public boolean isRevoked() { return revoked; }
-    public void setRevoked(boolean v) { this.revoked = v; }
 }

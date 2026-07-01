@@ -4,12 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
 import com.agentpluginhub.domain.SubmissionState;
-import com.agentpluginhub.registry.TarballManifestReader;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import com.agentpluginhub.support.TestDataSeeder;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -24,7 +22,7 @@ import org.springframework.test.context.TestPropertySource;
 class PublishingServiceIT extends AbstractIntegrationTest {
 
     @Autowired PublishingService publishing;
-    @Autowired SubmissionRepository submissions;
+    @Autowired SubmissionMapper submissions;
     @Autowired TestDataSeeder seeder;
 
     private static byte[] tgz(Map<String, String> entries) throws Exception {
@@ -53,7 +51,8 @@ class PublishingServiceIT extends AbstractIntegrationTest {
     @Test
     void should_create_submitted_submission_for_valid_upload() throws Exception {
         Long id = publishing.publish(validPlugin("@demo/p6a", "1.0.0"), "alice");
-        Submission s = submissions.findById(id).orElseThrow();
+        Submission s = submissions.selectById(id);
+        assertThat(s).isNotNull();
         assertThat(s.getState()).isEqualTo(SubmissionState.SUBMITTED);
         assertThat(s.getPackageName()).isEqualTo("@demo/p6a");
         assertThat(s.getVersion()).isEqualTo("1.0.0");

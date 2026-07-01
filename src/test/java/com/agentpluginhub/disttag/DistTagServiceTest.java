@@ -3,7 +3,6 @@ package com.agentpluginhub.disttag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,27 +10,57 @@ import static org.mockito.Mockito.when;
 import com.agentpluginhub.common.PackageNotFoundException;
 import com.agentpluginhub.common.VersionNotFoundException;
 import com.agentpluginhub.domain.DistTag;
-import com.agentpluginhub.domain.DistTagRepository;
 import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.agentpluginhub.publish.ValidationException;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import java.lang.reflect.Field;
 import java.util.List;
-import java.util.Optional;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DistTagServiceTest {
 
-    private final PluginRepository plugins = mock(PluginRepository.class);
-    private final PluginVersionRepository versions = mock(PluginVersionRepository.class);
-    private final DistTagRepository distTags = mock(DistTagRepository.class);
+    private final PluginMapper plugins = mock(PluginMapper.class);
+    private final PluginVersionMapper versions = mock(PluginVersionMapper.class);
+    private final DistTagMapper distTags = mock(DistTagMapper.class);
     private final DistTagService service = new DistTagService(plugins, versions, distTags);
+
+    @BeforeAll
+    static void initMybatisPlusTableInfo() {
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Plugin.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), PluginVersion.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), DistTag.class);
+    }
 
     private Plugin plugin() {
         Plugin p = new Plugin("@demo/foo", "foo", "d", null);
-        // id 在真实场景由 DB 生成;这里用反射不便,改用 spy 不值得 —— 直接 stub findByPackageName 返回它,
-        // 并让 existsByPluginIdAndVersionAndStatus 不依赖具体 id。
+        setId(p, 42L);
         return p;
+    }
+
+    private static void setId(Plugin plugin, Long id) {
+        try {
+            Field idField = Plugin.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(plugin, id);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("failed to set plugin id", e);
+        }
+    }
+
+    private static void assertWrapperContains(LambdaQueryWrapper<?> wrapper,
+            String expectedSql, Object expectedValue) {
+        assertThat(wrapper.getSqlSegment()).contains(expectedSql);
+        assertThat(wrapper.getParamNameValuePairs()).containsValue(expectedValue);
     }
 
     @Test
@@ -50,7 +79,7 @@ class DistTagServiceTest {
 
     @Test
     void throws_when_package_missing() {
-        when(plugins.findByPackageName("@demo/foo")).thenReturn(Optional.empty());
+        when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
         assertThatThrownBy(() -> service.setDistTag("@demo/foo", "stable", "1.0.0", "admin"))
                 .isInstanceOf(PackageNotFoundException.class);
     }
@@ -58,9 +87,8 @@ class DistTagServiceTest {
     @Test
     void throws_when_version_not_published() {
         Plugin p = plugin();
-        when(plugins.findByPackageName("@demo/foo")).thenReturn(Optional.of(p));
-        when(versions.existsByPluginIdAndVersionAndStatus(any(), eq("9.9.9"), eq("PUBLISHED")))
-                .thenReturn(false);
+        when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
+        when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
         assertThatThrownBy(() -> service.setDistTag("@demo/foo", "stable", "9.9.9", "admin"))
                 .isInstanceOf(VersionNotFoundException.class);
     }
@@ -69,18 +97,51 @@ class DistTagServiceTest {
     void upserts_existing_tag_and_returns_current_map() {
         Plugin p = plugin();
         DistTag stable = new DistTag(null, "stable", "1.0.0");
-        when(plugins.findByPackageName("@demo/foo")).thenReturn(Optional.of(p));
-        when(versions.existsByPluginIdAndVersionAndStatus(any(), eq("1.1.0"), eq("PUBLISHED")))
-                .thenReturn(true);
-        when(distTags.findByPluginIdAndTag(any(), eq("stable"))).thenReturn(Optional.of(stable));
-        when(distTags.findByPluginId(any())).thenReturn(List.of(
+        when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
+        when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
+        when(distTags.selectOne(any(LambdaQueryWrapper.class))).thenReturn(stable);
+        when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
                 new DistTag(null, "latest", "1.1.0"), stable));
 
         var result = service.setDistTag("@demo/foo", "stable", "1.1.0", "admin");
 
         assertThat(stable.getVersion()).isEqualTo("1.1.0");          // 指针已移动
         assertThat(stable.getUpdatedBy()).isEqualTo("admin");        // 审计填充
-        verify(distTags).save(stable);
+        verify(distTags).updateById(stable);
         assertThat(result).containsEntry("stable", "1.1.0");
+    }
+
+    @Test
+    void queries_package_and_published_version_with_required_conditions() {
+        Plugin p = plugin();
+        when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
+        when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
+        when(distTags.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(new DistTag(p.getId(), "stable", "1.0.0"));
+        when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
+
+        service.setDistTag("@demo/foo", "stable", "1.1.0", "admin");
+
+        ArgumentCaptor<LambdaQueryWrapper<Plugin>> packageQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(plugins).selectOne(packageQuery.capture());
+        assertWrapperContains(packageQuery.getValue(), "package_name", "@demo/foo");
+
+        ArgumentCaptor<LambdaQueryWrapper<PluginVersion>> versionExistsQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(versions).selectCount(versionExistsQuery.capture());
+        LambdaQueryWrapper<PluginVersion> wrapper = versionExistsQuery.getValue();
+        assertThat(wrapper.getSqlSegment()).contains("plugin_id", "version", "status");
+        assertThat(wrapper.getParamNameValuePairs()).containsValue(p.getId())
+                .containsValue("1.1.0")
+                .containsValue("PUBLISHED");
+
+        ArgumentCaptor<LambdaQueryWrapper<DistTag>> existingTagQuery =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(distTags).selectOne(existingTagQuery.capture());
+        LambdaQueryWrapper<DistTag> existingTagWrapper = existingTagQuery.getValue();
+        assertThat(existingTagWrapper.getSqlSegment()).contains("plugin_id", "tag");
+        assertThat(existingTagWrapper.getParamNameValuePairs()).containsValue(p.getId())
+                .containsValue("stable");
     }
 }

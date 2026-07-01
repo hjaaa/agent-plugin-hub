@@ -3,14 +3,17 @@ package com.agentpluginhub.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.agentpluginhub.domain.DistTag;
-import com.agentpluginhub.domain.DistTagRepository;
 import com.agentpluginhub.domain.Plugin;
-import com.agentpluginhub.domain.PluginRepository;
+import com.agentpluginhub.mapper.DistTagMapper;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
 import com.agentpluginhub.support.AbstractIntegrationTest;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import java.util.List;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import javax.sql.DataSource;
 
 /**
  * 验证 V3 回填逻辑:只有 latest、无 stable 的插件执行回填后 stable 出现,
@@ -33,10 +36,10 @@ class StableBackfillIT extends AbstractIntegrationTest {
             "  )";
 
     @Autowired
-    private PluginRepository pluginRepo;
+    private PluginMapper pluginRepo;
 
     @Autowired
-    private DistTagRepository distTags;
+    private DistTagMapper distTags;
 
     @Autowired
     private DataSource dataSource;
@@ -44,27 +47,33 @@ class StableBackfillIT extends AbstractIntegrationTest {
     @Test
     void backfill_creates_stable_from_latest_and_is_idempotent() {
         // 准备:建一个只有 latest 的 M1 遗留插件(唯一包名避免与其它测试数据冲突)
-        Plugin plugin = pluginRepo.save(
-                new Plugin("@demo/m1legacy", "M1 Legacy Plugin", "backfill test fixture", null));
+        Plugin plugin = new Plugin("@demo/m1legacy", "M1 Legacy Plugin", "backfill test fixture", null);
+        pluginRepo.insert(plugin);
         Long pluginId = plugin.getId();
 
-        distTags.save(new DistTag(pluginId, "latest", "1.0.0"));
+        distTags.insert(new DistTag(pluginId, "latest", "1.0.0"));
         // 确认此时没有 stable
-        assertThat(distTags.findByPluginIdAndTag(pluginId, "stable")).isEmpty();
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, pluginId)
+                .eq(DistTag::getTag, "stable"))).isEmpty();
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         // 第一次回填:应产生 stable 行
         jdbc.execute(BACKFILL_SQL);
 
-        assertThat(distTags.findByPluginIdAndTag(pluginId, "stable"))
+        assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, pluginId)
+                .eq(DistTag::getTag, "stable")))
                 .isPresent()
                 .hasValueSatisfying(t -> assertThat(t.getVersion()).isEqualTo("1.0.0"));
 
         // 第二次回填:幂等,stable 行数仍为 1
         jdbc.execute(BACKFILL_SQL);
 
-        long stableCount = distTags.findByPluginId(pluginId).stream()
+        List<DistTag> tags = distTags.selectList(Wrappers.<DistTag>lambdaQuery()
+                .eq(DistTag::getPluginId, pluginId));
+        long stableCount = tags.stream()
                 .filter(t -> t.getTag().equals("stable"))
                 .count();
         assertThat(stableCount).isEqualTo(1);

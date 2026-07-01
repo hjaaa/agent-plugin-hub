@@ -1,7 +1,7 @@
 package com.agentpluginhub.publish;
 
 import com.agentpluginhub.domain.Submission;
-import com.agentpluginhub.domain.SubmissionRepository;
+import com.agentpluginhub.mapper.SubmissionMapper;
 import java.io.IOException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +20,9 @@ import org.springframework.web.multipart.MultipartFile;
 public class PublishController {
 
     private final PublishingService publishing;
-    private final SubmissionRepository submissions;
+    private final SubmissionMapper submissions;
 
-    public PublishController(PublishingService publishing, SubmissionRepository submissions) {
+    public PublishController(PublishingService publishing, SubmissionMapper submissions) {
         this.publishing = publishing;
         this.submissions = submissions;
     }
@@ -34,7 +34,10 @@ public class PublishController {
             @RequestParam("file") MultipartFile file) throws IOException {
         String submitter = principal != null ? principal.getSubject() : "anonymous";
         Long id = publishing.publish(file.getBytes(), submitter);
-        Submission s = submissions.findById(id).orElseThrow();
+        Submission s = submissions.selectById(id);
+        if (s == null) {
+            throw new IllegalStateException("Submission not found: " + id);
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 new PublishResponse(id, s.getPackageName(), s.getVersion(), s.getState().name()));
     }

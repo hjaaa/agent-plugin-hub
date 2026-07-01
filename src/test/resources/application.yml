@@ -1,8 +1,4 @@
 spring:
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
   security:
     oauth2:
       client:

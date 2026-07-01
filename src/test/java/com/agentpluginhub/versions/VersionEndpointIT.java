@@ -5,12 +5,16 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.agentpluginhub.domain.PluginRepository;
-import com.agentpluginhub.domain.PluginVersionRepository;
+import com.agentpluginhub.domain.Plugin;
+import com.agentpluginhub.domain.PluginVersion;
+import com.agentpluginhub.mapper.MapperQueries;
+import com.agentpluginhub.mapper.PluginMapper;
+import com.agentpluginhub.mapper.PluginVersionMapper;
 import com.agentpluginhub.publish.PublishingService;
 import com.agentpluginhub.review.ReviewService;
 import com.agentpluginhub.support.AbstractIntegrationTest;
 import com.agentpluginhub.support.TestTarballs;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,16 +29,20 @@ class VersionEndpointIT extends AbstractIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired PublishingService publishing;
     @Autowired ReviewService review;
-    @Autowired PluginRepository plugins;
-    @Autowired PluginVersionRepository versions;
+    @Autowired PluginMapper plugins;
+    @Autowired PluginVersionMapper versions;
 
     private static final String PKG = "@demo/verit";
 
     @BeforeEach
     void seed() throws Exception {
         for (String v : new String[]{"1.0.0", "1.1.0"}) {
-            boolean published = plugins.findByPackageName(PKG)
-                    .map(p -> versions.existsByPluginIdAndVersionAndStatus(p.getId(), v, "PUBLISHED"))
+            boolean published = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                            .eq(Plugin::getPackageName, PKG))
+                    .map(p -> MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
+                            .eq(PluginVersion::getPluginId, p.getId())
+                            .eq(PluginVersion::getVersion, v)
+                            .eq(PluginVersion::getStatus, "PUBLISHED")))
                     .orElse(false);
             if (!published) {
                 review.approve(publishing.publish(TestTarballs.plugin(PKG, v), "alice"), "admin", "ok");

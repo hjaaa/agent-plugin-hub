@@ -1,39 +1,37 @@
 package com.agentpluginhub.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Entity
-@Table(name = "dist_tag")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@TableName("dist_tag")
 public class DistTag {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(name = "plugin_id", nullable = false)
+    @TableField("plugin_id")
     private Long pluginId;
 
-    @Column(nullable = false)
     private String tag;
 
-    @Column(nullable = false)
+    @Setter
     private String version;
 
     // 移动指针的 admin subject 与移动时刻;M1 既有 latest 行为 NULL(不回填)
-    @Column(name = "updated_by")
+    @TableField("updated_by")
     private String updatedBy;
 
-    @Column(name = "updated_at")
+    @TableField("updated_at")
     private Instant updatedAt;
-
-    protected DistTag() {
-    }
 
     public DistTag(Long pluginId, String tag, String version) {
         this.pluginId = pluginId;
@@ -55,12 +53,4 @@ public class DistTag {
         this.updatedBy = updatedBy;
         this.updatedAt = updatedAt;
     }
-
-    public Long getId() { return id; }
-    public Long getPluginId() { return pluginId; }
-    public String getTag() { return tag; }
-    public String getVersion() { return version; }
-    public void setVersion(String v) { this.version = v; }
-    public String getUpdatedBy() { return updatedBy; }
-    public Instant getUpdatedAt() { return updatedAt; }
 }
