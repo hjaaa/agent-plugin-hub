@@ -71,6 +71,26 @@ class ReviewServiceIT extends AbstractIntegrationTest {
         return bos.toByteArray();
     }
 
+    static byte[] pluginWithoutDescription(String pkg, String version, String pluginName) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        Map<String, String> entries = Map.of(
+                "package/package.json", "{\"name\":\"" + pkg + "\",\"version\":\"" + version + "\"}",
+                "package/.claude-plugin/plugin.json",
+                "{\"name\":\"" + pluginName + "\",\"version\":\"" + version + "\"}");
+        try (TarArchiveOutputStream tar =
+                new TarArchiveOutputStream(new GzipCompressorOutputStream(bos))) {
+            for (Map.Entry<String, String> en : entries.entrySet()) {
+                byte[] c = en.getValue().getBytes(StandardCharsets.UTF_8);
+                TarArchiveEntry e = new TarArchiveEntry(en.getKey());
+                e.setSize(c.length);
+                tar.putArchiveEntry(e);
+                tar.write(c);
+                tar.closeArchiveEntry();
+            }
+        }
+        return bos.toByteArray();
+    }
+
     @Test
     void approve_should_publish_version_and_set_latest_and_store_canonical_blob() throws Exception {
         byte[] bytes = plugin("@demo/p7a", "1.0.0");
@@ -129,6 +149,19 @@ class ReviewServiceIT extends AbstractIntegrationTest {
                 .eq(DistTag::getPluginId, p.getId())
                 .eq(DistTag::getTag, "latest")).orElseThrow().getVersion())
                 .isEqualTo("2.0.0");
+    }
+
+    @Test
+    void approving_new_version_without_description_clears_plugin_description() throws Exception {
+        Long id1 = publishing.publish(plugin("@demo/p7nodesc", "1.0.0", "old-name", "old desc"), "alice");
+        review.approve(id1, "admin", "ok");
+        Long id2 = publishing.publish(pluginWithoutDescription("@demo/p7nodesc", "2.0.0", "new-name"), "alice");
+        review.approve(id2, "admin", "ok");
+
+        Plugin p = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
+                .eq(Plugin::getPackageName, "@demo/p7nodesc")).orElseThrow();
+        assertThat(p.getPluginName()).isEqualTo("new-name");
+        assertThat(p.getDescription()).isNull();
     }
 
     @Test

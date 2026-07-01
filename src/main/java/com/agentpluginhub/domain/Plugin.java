@@ -1,5 +1,6 @@
 package com.agentpluginhub.domain;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -26,6 +27,7 @@ public class Plugin {
     private String pluginName;
 
     @Setter
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String description;
 
     @Setter
