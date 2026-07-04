@@ -42,7 +42,10 @@ class DistTagServiceTest {
     }
 
     private Plugin plugin() {
-        Plugin p = new Plugin("@demo/foo", "foo", "d", null);
+        Plugin p = new Plugin();
+        p.setPackageName("@demo/foo");
+        p.setPluginName("foo");
+        p.setDescription("d");
         setId(p, 42L);
         return p;
     }
@@ -96,12 +99,12 @@ class DistTagServiceTest {
     @Test
     void upserts_existing_tag_and_returns_current_map() {
         Plugin p = plugin();
-        DistTag stable = new DistTag(null, "stable", "1.0.0");
+        DistTag stable = distTag(null, "stable", "1.0.0");
         when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
         when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
         when(distTags.selectOne(any(LambdaQueryWrapper.class))).thenReturn(stable);
         when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
-                new DistTag(null, "latest", "1.1.0"), stable));
+                distTag(null, "latest", "1.1.0"), stable));
 
         var result = service.setDistTag("@demo/foo", "stable", "1.1.0", "admin");
 
@@ -117,7 +120,7 @@ class DistTagServiceTest {
         when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(p);
         when(versions.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
         when(distTags.selectOne(any(LambdaQueryWrapper.class)))
-                .thenReturn(new DistTag(p.getId(), "stable", "1.0.0"));
+                .thenReturn(distTag(p.getId(), "stable", "1.0.0"));
         when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
 
         service.setDistTag("@demo/foo", "stable", "1.1.0", "admin");
@@ -143,5 +146,13 @@ class DistTagServiceTest {
         assertThat(existingTagWrapper.getSqlSegment()).contains("plugin_id", "tag");
         assertThat(existingTagWrapper.getParamNameValuePairs()).containsValue(p.getId())
                 .containsValue("stable");
+    }
+
+    private static DistTag distTag(Long pluginId, String tag, String version) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        return distTag;
     }
 }

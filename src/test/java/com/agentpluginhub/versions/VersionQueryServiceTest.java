@@ -51,7 +51,10 @@ class VersionQueryServiceTest {
     }
 
     private static Plugin plugin() {
-        Plugin p = new Plugin("@demo/foo", "foo", "d", null);
+        Plugin p = new Plugin();
+        p.setPackageName("@demo/foo");
+        p.setPluginName("foo");
+        p.setDescription("d");
         setId(p, 42L);
         return p;
     }
@@ -80,7 +83,7 @@ class VersionQueryServiceTest {
                 pv("1.1.0", Instant.parse("2026-02-01T00:00:00Z")),
                 pv("1.0.0", Instant.parse("2026-01-01T00:00:00Z"))));
         when(distTags.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(
-                new DistTag(null, "latest", "1.1.0"), new DistTag(null, "stable", "1.0.0")));
+                distTag(null, "latest", "1.1.0"), distTag(null, "stable", "1.0.0")));
 
         PluginVersionsView view = service.list("@demo/foo");
 
@@ -131,5 +134,13 @@ class VersionQueryServiceTest {
         when(plugins.selectOne(any(LambdaQueryWrapper.class))).thenReturn(plugin);
         when(versions.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
         assertThatThrownBy(() -> service.list("@demo/foo")).isInstanceOf(PackageNotFoundException.class);
+    }
+
+    private static DistTag distTag(Long pluginId, String tag, String version) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        return distTag;
     }
 }

@@ -34,7 +34,11 @@ public class TestDataSeeder {
         Plugin plugin = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
                 .eq(Plugin::getPackageName, packageName))
                 .orElseGet(() -> {
-                    Plugin created = new Plugin(packageName, pluginName, "demo", "team");
+                    Plugin created = new Plugin();
+                    created.setPackageName(packageName);
+                    created.setPluginName(pluginName);
+                    created.setDescription("demo");
+                    created.setOwnerTeam("team");
                     plugins.insert(created);
                     return created;
                 });
@@ -59,12 +63,20 @@ public class TestDataSeeder {
                 .eq(DistTag::getPluginId, plugin.getId())
                 .eq(DistTag::getTag, "latest"))
                 .ifPresentOrElse(t -> { t.setVersion(version); distTags.updateById(t); },
-                        () -> distTags.insert(new DistTag(plugin.getId(), "latest", version)));
+                        () -> distTags.insert(newDistTag(plugin.getId(), "latest", version)));
         // M2:种子插件也设 stable(镜像"首发即设 stable"),使其出现在 marketplace.json
         if (!MapperQueries.exists(distTags, Wrappers.<DistTag>lambdaQuery()
                 .eq(DistTag::getPluginId, plugin.getId())
                 .eq(DistTag::getTag, "stable"))) {
-            distTags.insert(new DistTag(plugin.getId(), "stable", version));
+            distTags.insert(newDistTag(plugin.getId(), "stable", version));
         }
+    }
+
+    private DistTag newDistTag(Long pluginId, String tag, String version) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        return distTag;
     }
 }

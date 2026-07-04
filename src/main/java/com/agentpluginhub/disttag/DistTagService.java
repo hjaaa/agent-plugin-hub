@@ -56,15 +56,30 @@ public class DistTagService {
         Instant ts = Instant.now();
         MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
                         .eq(DistTag::getPluginId, plugin.getId())
-                        .eq(DistTag::getTag, tag))
+                .eq(DistTag::getTag, tag))
                 .ifPresentOrElse(
-                        t -> { t.apply(version, subject, ts); distTags.updateById(t); },
-                        () -> distTags.insert(new DistTag(plugin.getId(), tag, version, subject, ts)));
+                        t -> {
+                            t.setVersion(version);
+                            t.setUpdatedBy(subject);
+                            t.setUpdatedAt(ts);
+                            distTags.updateById(t);
+                        },
+                        () -> distTags.insert(newDistTag(plugin.getId(), tag, version, subject, ts)));
         Map<String, String> current = new LinkedHashMap<>();
         for (DistTag t : distTags.selectList(Wrappers.<DistTag>lambdaQuery()
                 .eq(DistTag::getPluginId, plugin.getId()))) {
             current.put(t.getTag(), t.getVersion());
         }
         return current;
+    }
+
+    private DistTag newDistTag(Long pluginId, String tag, String version, String updatedBy, Instant updatedAt) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        distTag.setUpdatedBy(updatedBy);
+        distTag.setUpdatedAt(updatedAt);
+        return distTag;
     }
 }

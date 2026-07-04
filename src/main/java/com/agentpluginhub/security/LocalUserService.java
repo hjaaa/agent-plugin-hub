@@ -34,7 +34,10 @@ public class LocalUserService {
         AppUser user = MapperQueries.one(users, Wrappers.<AppUser>lambdaQuery()
                 .eq(AppUser::getSubject, subject))
                 .orElseGet(() -> {
-                    AppUser created = new AppUser(subject, email, Instant.now());
+                    AppUser created = new AppUser();
+                    created.setSubject(subject);
+                    created.setEmail(email);
+                    created.setCreatedAt(Instant.now());
                     users.insert(created);
                     return created;
                 });
@@ -46,7 +49,7 @@ public class LocalUserService {
         if (!MapperQueries.exists(roles, Wrappers.<UserRole>lambdaQuery()
                 .eq(UserRole::getUserId, user.getId())
                 .eq(UserRole::getRole, AUTHOR))) {
-            roles.insert(new UserRole(user.getId(), AUTHOR));
+            roles.insert(newUserRole(user.getId(), AUTHOR));
         }
         // 引导初始 admin
         String bootstrapSubject = props.getBootstrapAdminSubject();
@@ -54,12 +57,19 @@ public class LocalUserService {
                 && !MapperQueries.exists(roles, Wrappers.<UserRole>lambdaQuery()
                         .eq(UserRole::getUserId, user.getId())
                         .eq(UserRole::getRole, ADMIN))) {
-            roles.insert(new UserRole(user.getId(), ADMIN));
+            roles.insert(newUserRole(user.getId(), ADMIN));
         }
         return roles.selectList(Wrappers.<UserRole>lambdaQuery()
                 .eq(UserRole::getUserId, user.getId()))
                 .stream()
                 .map(UserRole::getRole)
                 .toList();
+    }
+
+    private UserRole newUserRole(Long userId, String role) {
+        UserRole userRole = new UserRole();
+        userRole.setUserId(userId);
+        userRole.setRole(role);
+        return userRole;
     }
 }

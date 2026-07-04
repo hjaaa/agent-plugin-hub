@@ -28,7 +28,13 @@ public class RegistryTokenService {
         byte[] raw = new byte[32];
         random.nextBytes(raw);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        repo.insert(new RegistryToken(sha256(token), label, createdBy, Instant.now()));
+        RegistryToken registryToken = new RegistryToken();
+        registryToken.setTokenHash(sha256(token));
+        registryToken.setLabel(label);
+        registryToken.setCreatedBy(createdBy);
+        registryToken.setCreatedAt(Instant.now());
+        registryToken.setRevoked(false);
+        repo.insert(registryToken);
         return token;
     }
 

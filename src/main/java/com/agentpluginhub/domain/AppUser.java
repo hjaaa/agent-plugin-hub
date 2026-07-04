@@ -5,30 +5,25 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
-import lombok.AccessLevel;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Data
+@NoArgsConstructor
 @TableName("app_user")
 public class AppUser {
 
+    /** 用户主键 ID */
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 外部身份主体 */
     private String subject;
 
-    @Setter
+    /** 用户邮箱 */
     private String email;
 
+    /** 创建时间 */
     @TableField("created_at")
     private Instant createdAt;
-
-    public AppUser(String subject, String email, Instant createdAt) {
-        this.subject = subject;
-        this.email = email;
-        this.createdAt = createdAt;
-    }
 }

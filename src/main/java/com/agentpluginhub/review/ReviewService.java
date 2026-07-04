@@ -85,7 +85,10 @@ public class ReviewService {
                     return existing;
                 })
                 .orElseGet(() -> {
-                    Plugin created = new Plugin(s.getPackageName(), s.getPluginName(), s.getDescription(), null);
+                    Plugin created = new Plugin();
+                    created.setPackageName(s.getPackageName());
+                    created.setPluginName(s.getPluginName());
+                    created.setDescription(s.getDescription());
                     plugins.insert(created);
                     return created;
                 });
@@ -135,17 +138,19 @@ public class ReviewService {
                 .eq(DistTag::getTag, "latest"))
                 .ifPresentOrElse(
                         t -> {
-                            t.apply(s.getVersion(), reviewer, ts);
+                            t.setVersion(s.getVersion());
+                            t.setUpdatedBy(reviewer);
+                            t.setUpdatedAt(ts);
                             distTags.updateById(t);
                         },
                         () -> distTags.insert(
-                                new DistTag(plugin.getId(), "latest", s.getVersion(), reviewer, ts)));
+                                newDistTag(plugin.getId(), "latest", s.getVersion(), reviewer, ts)));
 
         // 首发规则:该 plugin 尚无 stable 时,同时把 stable 设为该版本(保证首发即可被装)
         if (MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
                 .eq(DistTag::getPluginId, plugin.getId())
                 .eq(DistTag::getTag, "stable")).isEmpty()) {
-            distTags.insert(new DistTag(plugin.getId(), "stable", s.getVersion(), reviewer, ts));
+            distTags.insert(newDistTag(plugin.getId(), "stable", s.getVersion(), reviewer, ts));
         }
 
         s.setState(SubmissionState.APPROVED);
@@ -180,6 +185,16 @@ public class ReviewService {
         if (updated == 0) {
             throw new OptimisticLockingFailureException("stale submission update:" + s.getId());
         }
+    }
+
+    private DistTag newDistTag(Long pluginId, String tag, String version, String updatedBy, Instant updatedAt) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        distTag.setUpdatedBy(updatedBy);
+        distTag.setUpdatedAt(updatedAt);
+        return distTag;
     }
 
     // 仅 SUBMITTED / UNDER_REVIEW 可被审批或驳回;终态拒绝(非法跃迁)
