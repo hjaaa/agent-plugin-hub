@@ -73,7 +73,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 | `POST /api/submissions/{id}/review\|approve\|reject` | ADMIN | 审核状态流转 |
 | `GET /api/plugin-versions/{*pkg}` | 登录用户 | 版本治理视图(发布时间降序) |
 | `PUT /api/dist-tags/{tag}/plugins/{*pkg}` | ADMIN | 提升 / 回滚 `latest` / `stable` 指针 |
-| `GET\|POST\|DELETE /api/registry-tokens` | ADMIN | registry 只读 token 签发与吊销 |
+| `POST /api/registry-tokens`、`DELETE /api/registry-tokens/{id}` | ADMIN | registry 只读 token 签发与吊销 |
 | `GET /healthz` | 公开 | 健康检查 |
 
 注:scoped 包名中的 `/` 在 URL 里编码为 `%2F`,如 `@demo%2Fhello-plugin`。
