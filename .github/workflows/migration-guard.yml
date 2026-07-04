@@ -2,9 +2,6 @@ name: Migration Guard
 
 on:
   pull_request:
-    paths:
-      - src/main/resources/db/migration/**
-      - .github/workflows/migration-guard.yml
   workflow_dispatch:
 
 permissions:
