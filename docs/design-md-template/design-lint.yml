@@ -1,0 +1,35 @@
+# 复制到目标仓库 .github/workflows/design-lint.yml
+# 唯一需要改的:最后一行 lint 的文件路径
+name: Design Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  design-lint:
+    name: DESIGN.md Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 版本固定,升级须显式改动本文件(供应链可控);升级前先本地跑通再改
+      - name: Lint DESIGN.md
+        run: npx -y @google/design.md@0.3.0 lint frontend/DESIGN.md
