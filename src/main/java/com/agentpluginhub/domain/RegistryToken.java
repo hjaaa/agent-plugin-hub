@@ -5,38 +5,33 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.Instant;
-import lombok.AccessLevel;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Data
+@NoArgsConstructor
 @TableName("registry_token")
 public class RegistryToken {
 
+    /** 令牌主键 ID */
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 令牌哈希值 */
     @TableField("token_hash")
     private String tokenHash;
 
+    /** 令牌标签 */
     private String label;
 
+    /** 创建人主体 */
     @TableField("created_by")
     private String createdBy;
 
+    /** 创建时间 */
     @TableField("created_at")
     private Instant createdAt;
 
-    @Setter
+    /** 是否已吊销 */
     private boolean revoked;
-
-    public RegistryToken(String tokenHash, String label, String createdBy, Instant createdAt) {
-        this.tokenHash = tokenHash;
-        this.label = label;
-        this.createdBy = createdBy;
-        this.createdAt = createdAt;
-        this.revoked = false;
-    }
 }

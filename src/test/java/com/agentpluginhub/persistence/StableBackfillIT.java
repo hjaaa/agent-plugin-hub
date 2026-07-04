@@ -47,11 +47,14 @@ class StableBackfillIT extends AbstractIntegrationTest {
     @Test
     void backfill_creates_stable_from_latest_and_is_idempotent() {
         // 准备:建一个只有 latest 的 M1 遗留插件(唯一包名避免与其它测试数据冲突)
-        Plugin plugin = new Plugin("@demo/m1legacy", "M1 Legacy Plugin", "backfill test fixture", null);
+        Plugin plugin = new Plugin();
+        plugin.setPackageName("@demo/m1legacy");
+        plugin.setPluginName("M1 Legacy Plugin");
+        plugin.setDescription("backfill test fixture");
         pluginRepo.insert(plugin);
         Long pluginId = plugin.getId();
 
-        distTags.insert(new DistTag(pluginId, "latest", "1.0.0"));
+        distTags.insert(distTag(pluginId, "latest", "1.0.0"));
         // 确认此时没有 stable
         assertThat(MapperQueries.one(distTags, Wrappers.<DistTag>lambdaQuery()
                 .eq(DistTag::getPluginId, pluginId)
@@ -77,5 +80,13 @@ class StableBackfillIT extends AbstractIntegrationTest {
                 .filter(t -> t.getTag().equals("stable"))
                 .count();
         assertThat(stableCount).isEqualTo(1);
+    }
+
+    private DistTag distTag(Long pluginId, String tag, String version) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        return distTag;
     }
 }

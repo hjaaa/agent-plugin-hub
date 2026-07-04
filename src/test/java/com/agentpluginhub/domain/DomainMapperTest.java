@@ -24,10 +24,10 @@ class DomainMapperTest extends AbstractIntegrationTest {
 
     @Test
     void dist_tag_persists_audit_columns() {
-        Plugin p = new Plugin("@demo/audit", "audit", null, null);
+        Plugin p = newPlugin("@demo/audit", "audit", null, null);
         plugins.insert(p);
         Instant ts = Instant.now();
-        DistTag saved = new DistTag(p.getId(), "stable", "1.0.0", "admin-sub", ts);
+        DistTag saved = newDistTag(p.getId(), "stable", "1.0.0", "admin-sub", ts);
         distTags.insert(saved);
 
         DistTag reloaded = distTags.selectById(saved.getId());
@@ -38,7 +38,7 @@ class DomainMapperTest extends AbstractIntegrationTest {
 
     @Test
     void should_persist_and_find_plugin_by_package() {
-        Plugin p = new Plugin("@demo/x", "x", "desc", "team-a");
+        Plugin p = newPlugin("@demo/x", "x", "desc", "team-a");
         plugins.insert(p);
         assertThat(plugins.selectOne(Wrappers.<Plugin>lambdaQuery()
                 .eq(Plugin::getPackageName, "@demo/x"))).isNotNull();
@@ -46,18 +46,37 @@ class DomainMapperTest extends AbstractIntegrationTest {
 
     @Test
     void should_reject_duplicate_package_name() {
-        plugins.insert(new Plugin("@demo/dup", "dup", null, null));
-        assertThatThrownBy(() -> plugins.insert(new Plugin("@demo/dup", "dup2", null, null)))
+        plugins.insert(newPlugin("@demo/dup", "dup", null, null));
+        assertThatThrownBy(() -> plugins.insert(newPlugin("@demo/dup", "dup2", null, null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void should_reject_duplicate_plugin_version() {
-        Plugin p = new Plugin("@demo/v", "v", null, null);
+        Plugin p = newPlugin("@demo/v", "v", null, null);
         plugins.insert(p);
         versions.insert(newVersion(p.getId(), "1.0.0"));
         assertThatThrownBy(() -> versions.insert(newVersion(p.getId(), "1.0.0")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private Plugin newPlugin(String packageName, String pluginName, String description, String ownerTeam) {
+        Plugin plugin = new Plugin();
+        plugin.setPackageName(packageName);
+        plugin.setPluginName(pluginName);
+        plugin.setDescription(description);
+        plugin.setOwnerTeam(ownerTeam);
+        return plugin;
+    }
+
+    private DistTag newDistTag(Long pluginId, String tag, String version, String updatedBy, Instant updatedAt) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        distTag.setUpdatedBy(updatedBy);
+        distTag.setUpdatedAt(updatedAt);
+        return distTag;
     }
 
     private PluginVersion newVersion(Long pluginId, String v) {

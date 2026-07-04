@@ -34,15 +34,21 @@ public class TestDataSeeder {
         Plugin plugin = MapperQueries.one(plugins, Wrappers.<Plugin>lambdaQuery()
                 .eq(Plugin::getPackageName, packageName))
                 .orElseGet(() -> {
-                    Plugin created = new Plugin(packageName, pluginName, "demo", "team");
+                    Plugin created = new Plugin();
+                    created.setPackageName(packageName);
+                    created.setPluginName(pluginName);
+                    created.setDescription("demo");
+                    created.setOwnerTeam("team");
                     plugins.insert(created);
                     return created;
                 });
+        // 产物总是写入当前上下文的 store:版本行可能已被其他测试类种入共享 DB,
+        // 但各上下文的 artifacts 目录相互独立,跳过 save 会让本上下文读路径 404
+        store.save(tarballRef, tarball);
         // 幂等:同一版本已存在则跳过插入,避免跨测试类共享容器时违反唯一约束
         if (!MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
                 .eq(PluginVersion::getPluginId, plugin.getId())
                 .eq(PluginVersion::getVersion, version))) {
-            store.save(tarballRef, tarball);
             PluginVersion pv = new PluginVersion();
             pv.setPluginId(plugin.getId());
             pv.setVersion(version);
@@ -59,12 +65,20 @@ public class TestDataSeeder {
                 .eq(DistTag::getPluginId, plugin.getId())
                 .eq(DistTag::getTag, "latest"))
                 .ifPresentOrElse(t -> { t.setVersion(version); distTags.updateById(t); },
-                        () -> distTags.insert(new DistTag(plugin.getId(), "latest", version)));
+                        () -> distTags.insert(newDistTag(plugin.getId(), "latest", version)));
         // M2:种子插件也设 stable(镜像"首发即设 stable"),使其出现在 marketplace.json
         if (!MapperQueries.exists(distTags, Wrappers.<DistTag>lambdaQuery()
                 .eq(DistTag::getPluginId, plugin.getId())
                 .eq(DistTag::getTag, "stable"))) {
-            distTags.insert(new DistTag(plugin.getId(), "stable", version));
+            distTags.insert(newDistTag(plugin.getId(), "stable", version));
         }
+    }
+
+    private DistTag newDistTag(Long pluginId, String tag, String version) {
+        DistTag distTag = new DistTag();
+        distTag.setPluginId(pluginId);
+        distTag.setTag(tag);
+        distTag.setVersion(version);
+        return distTag;
     }
 }

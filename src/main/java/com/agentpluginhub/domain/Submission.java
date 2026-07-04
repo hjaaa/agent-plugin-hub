@@ -6,69 +6,69 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
 import java.time.Instant;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
+@Data
 @NoArgsConstructor
 @TableName("submission")
 public class Submission {
 
+    /** 提交单主键 ID */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Setter
+    /** NPM 包名 */
     @TableField("package_name")
     private String packageName;
 
-    @Setter
+    /** 提交版本号 */
     private String version;
 
-    @Setter
+    /** 插件名称 */
     @TableField("plugin_name")
     private String pluginName;
 
-    @Setter
+    /** 插件描述 */
     private String description;
 
-    @Setter
+    /** 待审核产物存储引用 */
     @TableField("tarball_ref")
     private String tarballRef;
 
-    @Setter
+    /** NPM integrity 校验值 */
     private String integrity;
 
-    @Setter
+    /** 产物 SHA1 摘要 */
     private String shasum;
 
-    @Setter
+    /** 产物字节大小 */
     @TableField("size_bytes")
     private long sizeBytes;
 
-    @Setter
+    /** 审核状态 */
     private SubmissionState state;
 
-    @Setter
+    /** 提交人主体 */
     private String submitter;
 
-    @Setter
+    /** 审核人主体 */
     private String reviewer;
 
-    @Setter
+    /** 审核备注 */
     @TableField("review_notes")
     private String reviewNotes;
 
-    @Setter
+    /** 乐观锁版本 */
     @Version
     @TableField("lock_version")
     private long lockVersion;
 
-    @Setter
+    /** 创建时间 */
     @TableField("created_at")
     private Instant createdAt;
 
-    @Setter
+    /** 更新时间 */
     @TableField("updated_at")
     private Instant updatedAt;
 }
