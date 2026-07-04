@@ -1,0 +1,38 @@
+name: Migration Guard
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  guard:
+    name: Released migrations are immutable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail if released migrations were modified or deleted
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          merge_base=$(git merge-base "origin/${BASE_REF}" HEAD)
+          changed=$(git diff --name-status --diff-filter=MDRT "${merge_base}" HEAD -- src/main/resources/db/migration/)
+          if [ -n "${changed}" ]; then
+            echo "::error::Released Flyway migrations must never be modified, renamed, deleted or type-changed. Add a new V*.sql migration instead."
+            echo "Offending changes:"
+            echo "${changed}"
+            exit 1
+          fi
+          echo "OK: no released migration was touched."
