@@ -42,11 +42,13 @@ public class TestDataSeeder {
                     plugins.insert(created);
                     return created;
                 });
+        // 产物总是写入当前上下文的 store:版本行可能已被其他测试类种入共享 DB,
+        // 但各上下文的 artifacts 目录相互独立,跳过 save 会让本上下文读路径 404
+        store.save(tarballRef, tarball);
         // 幂等:同一版本已存在则跳过插入,避免跨测试类共享容器时违反唯一约束
         if (!MapperQueries.exists(versions, Wrappers.<PluginVersion>lambdaQuery()
                 .eq(PluginVersion::getPluginId, plugin.getId())
                 .eq(PluginVersion::getVersion, version))) {
-            store.save(tarballRef, tarball);
             PluginVersion pv = new PluginVersion();
             pv.setPluginId(plugin.getId());
             pv.setVersion(version);
