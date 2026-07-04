@@ -25,8 +25,6 @@ jobs:
         java:
           - 17
           - 21
-    env:
-      NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -46,6 +44,8 @@ jobs:
 
       - name: Run unit and integration tests
         run: mvn -B --no-transfer-progress verify
+        env:
+          NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
 
       - name: Upload Surefire reports
         if: always()
